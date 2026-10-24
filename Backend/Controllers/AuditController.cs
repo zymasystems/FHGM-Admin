@@ -22,15 +22,27 @@ public sealed class AuditController(AppDbContext db) : ControllerBase
         var references = await db.AuditReferences.AsNoTracking()
             .Where(x => identifiers.Contains(x.Identifier))
             .ToDictionaryAsync(x => new { x.Entity, x.Identifier }, x => x.Id);
+        var actorIds = records.Where(x => x.UserId is not null).Select(x => x.UserId).Distinct().ToArray();
+        var actors = await db.Users.AsNoTracking().Where(x => actorIds.Contains(x.Id))
+            .Select(x => new { x.Id, x.DisplayName, x.UserName }).ToDictionaryAsync(x => x.Id);
 
         string? Reference(string entity, string? identifier) => identifier is null ? null
             : FormatReference(entity, references[new { Entity = entity, Identifier = identifier }]);
+        string UserName(string? identifier)
+        {
+            if (identifier is null) return "System";
+            if (!actors.TryGetValue(identifier, out var actor))
+                return "Deleted user (" + Reference("User", identifier) + ")";
+            if (!string.IsNullOrWhiteSpace(actor.DisplayName)) return actor.DisplayName.Trim();
+            return string.IsNullOrWhiteSpace(actor.UserName) ? "Unnamed user" : actor.UserName;
+        }
         return Ok(new { total = await db.AuditLogs.CountAsync(), page,
             items = records.Select(x => new
             {
                 x.Id, x.Action, x.Entity,
                 EntityId = Reference(x.Entity, x.EntityId),
                 UserId = Reference("User", x.UserId),
+                UserName = UserName(x.UserId),
                 x.CreatedAt
             }) });
     }

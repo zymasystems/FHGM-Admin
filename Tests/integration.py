@@ -51,7 +51,7 @@ class Client:
 def create_user(admin, role, suffix):
     return admin.request("/api/users", "POST", {
         "email": f"{PREFIX}-{suffix}@example.org", "password": PASSWORD,
-        "displayName": suffix, "role": role,
+        "displayName": "FHGM " + suffix + " Tester", "role": role,
     }, expected=201)
 
 
@@ -130,6 +130,7 @@ assert events == admin.request("/api/audit")["items"]  # Stable across requests.
 for item in events:
     assert re.fullmatch(r"[a-z]+-\d{2,}", item["entityId"])
     assert item["userId"] is None or re.fullmatch(r"user-\d{2,}", item["userId"])
+    assert isinstance(item["userName"], str) and item["userName"].strip()
     assert "ipAddress" not in item
     assert post["id"] not in json.dumps(item) and w["id"] not in json.dumps(item)
     if item["entity"] == "User" and item["action"] in ("Login", "Logout"):
@@ -140,6 +141,11 @@ for page in range(2, (admin.request("/api/audit")["total"] + 49) // 50 + 1):
     all_events.extend(admin.request("/api/audit?page=" + str(page))["items"])
 first_login = min((x for x in all_events if x["action"] == "Login"), key=lambda x: x["id"])
 assert first_login["userId"] == "user-01"
+writer_login = next(x for x in all_events if x["action"] == "Login" and x["userName"] == w["displayName"])
+assert writer_login["entityId"] == writer_login["userId"]
+for account in (w, o, e, m):
+    assert any(x["action"] == "Login" and x["userName"] == account["displayName"] for x in all_events)
+assert "FULL NAME / USERNAME" in admin.request("/admin/audit")
 # A published article keeps the same reference throughout its workflow.
 blog_labels = {x["entityId"] for x in all_events if x["entity"] == "BlogPost" and x["action"] == "Blog:publish"}
 assert len(blog_labels) == 1

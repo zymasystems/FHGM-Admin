@@ -49,7 +49,7 @@ async function loadView() {
     pagination('user', data, 25);
   } else {
     const data = await api('audit?page=' + pages.audit); $('audit-rows').replaceChildren();
-    for (const entry of data.items) { const tr = document.createElement('tr'); cell(tr, entry.action); cell(tr, entry.entity + ' · ' + entry.entityId); cell(tr, entry.userId); cell(tr, date(entry.createdAt)); $('audit-rows').append(tr); }
+    for (const entry of data.items) { const tr = document.createElement('tr'); cell(tr, entry.action); cell(tr, entry.entity + ' · ' + entry.entityId); cell(tr, entry.userName); cell(tr, date(entry.createdAt)); $('audit-rows').append(tr); }
     pagination('audit', data, 50);
   }
 }
