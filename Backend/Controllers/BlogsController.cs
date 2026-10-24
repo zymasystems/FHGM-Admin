@@ -13,7 +13,7 @@ namespace FHGM.Backend.Controllers;
 [ApiController, Route("api/blog"), Authorize(Policy = Permissions.ManageBlogs)]
 public sealed class BlogsController(IBlogRepository blogs, UserManager<AppUser> users, AuditService audit) : ControllerBase
 {
-    private bool IsEditor => User.IsInRole(Roles.SuperAdmin) || User.IsInRole(Roles.BlogEditor);
+    private bool IsEditor => User.IsInRole(Roles.SuperAdmin) || User.IsInRole(Roles.ChurchAdmin) || User.IsInRole(Roles.BlogEditor);
     private string UserId => users.GetUserId(User)!;
 
     [HttpGet]

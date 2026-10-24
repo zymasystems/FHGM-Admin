@@ -1,0 +1,21 @@
+# Include inside the existing public website HTTPS server block when connecting content.
+location ^~ /api/public/events {
+    limit_except GET { deny all; }
+    proxy_pass http://127.0.0.1:5080;
+    proxy_set_header Host admin.hisgraceministries.co.za;
+    proxy_set_header Cookie "";
+}
+location = /api/public/popups/active {
+    limit_except GET { deny all; }
+    proxy_pass http://127.0.0.1:5080;
+    proxy_set_header Host admin.hisgraceministries.co.za;
+    proxy_set_header Cookie "";
+}
+location = /cms/church-content.js {
+    proxy_pass http://127.0.0.1:5080/public/church-content.js;
+    proxy_set_header Host admin.hisgraceministries.co.za;
+}
+location = /cms/church-content.css {
+    proxy_pass http://127.0.0.1:5080/public/church-content.css;
+    proxy_set_header Host admin.hisgraceministries.co.za;
+}

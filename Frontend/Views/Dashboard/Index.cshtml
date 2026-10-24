@@ -11,19 +11,26 @@
             case "gallery": <partial name="_Gallery" /> break;
             case "users": <partial name="_Users" /> break;
             case "audit": <partial name="_Audit" /> break;
+            case "events": <partial name="_Events" /> break;
+            case "popups": <partial name="_Popups" /> break;
+            case "monitoring": <partial name="_Monitoring" /> break;
             default:
                 <section>
                     <div class="page-heading"><div><p class="eyebrow">SERVING HIS PURPOSE</p><h1>Welcome, @User.Identity?.Name</h1><p class="muted">Prepare and share the stories of For His Grace Ministries.</p></div></div>
                     <div class="summary">
                         <div><p class="eyebrow">YOUR MINISTRY WORKSPACE</p><h2>Share your church family</h2><p class="muted">Create albums, upload photos and choose what appears in the website gallery.</p>
-                        @if (User.IsInRole("SuperAdmin") || User.IsInRole("MediaManager"))
+                        @if (User.IsInRole("SuperAdmin") || User.IsInRole("ChurchAdmin") || User.IsInRole("MediaManager"))
                         { <a class="btn btn-primary primary" asp-action="Gallery">Manage photo gallery →</a> }
-                        @if (User.IsInRole("SuperAdmin") || User.IsInRole("Writer") || User.IsInRole("BlogEditor"))
+                        @if (User.IsInRole("SuperAdmin") || User.IsInRole("ChurchAdmin") || User.IsInRole("Writer") || User.IsInRole("BlogEditor"))
                         { <a class="btn btn-primary primary" asp-action="Blogs">Manage blog articles →</a> }
                         </div>
                         <div><p class="eyebrow">FOR HIS GRACE MINISTRIES</p><h2>Growing in Grace.<br>Living by Faith.</h2><p class="muted">This portal supports the ministry website.</p><a href="https://hisgraceministries.co.za/" target="_blank" rel="noopener">Visit the ministry website ↗</a></div>
                     </div>
-                    <div class="panel p-4"><h2>Portal development</h2><p class="muted mb-0">Photo albums, image uploads, accounts and blog publishing are available. Testimonials, announcements and events will follow.</p></div>
+                    @if (User.IsInRole("SuperAdmin") || User.IsInRole("ChurchAdmin") || User.IsInRole("CommunicationsManager"))
+                    {
+                        <div class="panel p-4"><h2>Keep your church informed</h2><p class="muted">Post events and schedule popup announcements. Events leave the public feed after their end time; announcements display only during their scheduled period.</p><div class="d-flex gap-3 flex-wrap"><a class="btn primary" asp-action="Events">Manage events</a><a class="btn outline" asp-action="Popups">Manage popups</a></div></div>
+                    }
+                    <div class="panel p-4"><h2>Portal development</h2><p class="muted mb-0">Gallery, blog, events and popup publishing are available. Developer Super Admins also have account management, monitoring and audit access.</p></div>
                 </section>
                 break;
         }
@@ -33,4 +40,6 @@
 @section Scripts {
     <script src="~/admin/app.js" asp-append-version="true" defer></script>
     @if (Model.ActiveView == "gallery") { <script src="~/admin/gallery.js" asp-append-version="true" defer></script> }
+    @if (Model.ActiveView == "events" || Model.ActiveView == "popups") { <script src="~/admin/church-content.js" asp-append-version="true" defer></script> }
+    @if (Model.ActiveView == "monitoring") { <script src="~/admin/monitoring.js" asp-append-version="true" defer></script> }
 }

@@ -44,7 +44,7 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install -r Tests/requirements.txt
       - run: dotnet build FHGM-Admin.sln -c Release --nologo
-      - run: node --check Frontend/wwwroot/admin/app.js && node --check Frontend/wwwroot/public/app.js && node --check Frontend/wwwroot/admin/gallery.js && node --check Frontend/wwwroot/public/gallery-widget.js
+      - run: node --check Frontend/wwwroot/admin/app.js && node --check Frontend/wwwroot/public/app.js && node --check Frontend/wwwroot/admin/gallery.js && node --check Frontend/wwwroot/public/gallery-widget.js && node --check Frontend/wwwroot/admin/church-content.js && node --check Frontend/wwwroot/admin/monitoring.js && node --check Frontend/wwwroot/public/church-content.js
       - run: dotnet bin/Release/net10.0/FHGM.Backend.dll --initialize
         working-directory: Backend
       - name: Exercise MVC and private API against PostgreSQL
@@ -66,7 +66,7 @@ jobs:
             if curl -fsS http://127.0.0.1:5080/health/ready; then break; fi
             sleep 1
           done
-          if ! python3 Tests/gallery_integration.py; then cat /tmp/fhgm-backend.log /tmp/fhgm-frontend.log; exit 1; fi
+          if ! python3 Tests/church_content_integration.py; then cat /tmp/fhgm-backend.log /tmp/fhgm-frontend.log; exit 1; fi
       - name: Validate Compose and build both container images
         env:
           POSTGRES_PASSWORD: ci-only-build-password

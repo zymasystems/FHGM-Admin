@@ -1,0 +1,8 @@
+<section>
+    <div class="page-heading"><div><p class="eyebrow">DEVELOPER SUPER ADMIN</p><h1>Monitoring</h1><p class="muted">Application health, backend process metrics and content/account totals.</p></div><button class="btn outline" id="monitor-refresh" type="button">Refresh</button></div>
+    <p id="monitor-checked" class="small muted" role="status">Checking application status…</p>
+    <div id="monitor-health" class="summary"></div>
+    <div id="monitor-counts" class="summary"></div>
+    <div class="panel p-4"><h2>Backend process</h2><dl id="monitor-process" class="row mb-0"></dl><p class="small muted mt-3 mb-0">Memory and uptime describe the backend process/container. Use the server's monitoring tools for VPS-wide metrics and Uptime Kuma for external availability.</p></div>
+    <div class="panel p-4"><h2>Administration</h2><p class="muted">Manage developer/church accounts and review recorded content and account changes.</p><div class="d-flex gap-3"><a class="btn primary" asp-action="Users">Team members</a><a class="btn outline" asp-action="Audit">Activity log</a></div></div>
+</section>

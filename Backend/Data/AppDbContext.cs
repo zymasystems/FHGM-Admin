@@ -10,6 +10,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<GalleryAlbum> GalleryAlbums => Set<GalleryAlbum>();
     public DbSet<GalleryImage> GalleryImages => Set<GalleryImage>();
+    public DbSet<MinistryEvent> Events => Set<MinistryEvent>();
+    public DbSet<PopupAnnouncement> Popups => Set<PopupAnnouncement>();
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -23,5 +25,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         builder.Entity<GalleryImage>().HasIndex(x => x.StorageKey).IsUnique();
         builder.Entity<GalleryImage>().HasIndex(x => new { x.AlbumId, x.IsComplete, x.IsPublished, x.IsDeleted });
         builder.Entity<GalleryImage>().HasOne(x => x.Album).WithMany(x => x.Images).HasForeignKey(x => x.AlbumId).OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<MinistryEvent>().HasIndex(x => x.Slug).IsUnique();
+        builder.Entity<MinistryEvent>().HasIndex(x => new { x.IsPublished, x.EndsAt });
+        builder.Entity<MinistryEvent>().Property(x => x.Version).IsConcurrencyToken();
+        builder.Entity<PopupAnnouncement>().HasIndex(x => new { x.IsPublished, x.StartsAt, x.EndsAt });
+        builder.Entity<PopupAnnouncement>().Property(x => x.Version).IsConcurrencyToken();
     }
 }
