@@ -24,9 +24,9 @@ The backend issues host-only HttpOnly session cookies through the MVC relay. The
 
 ## Implemented and planned
 
-Implemented: sign-in/logout, all five roles, team account creation and non-super-admin activation/deactivation, blog drafts/submission/review/rejection/approval/publication/archive/restore, published-only public feed/preview, stale-edit protection, CSRF validation, password hashing/lockout, audit records, EF migrations and application/dependency health checks.
+Implemented: sign-in/logout, all five roles, gallery albums and direct-to-R2 image uploads, descriptions, publishing/unpublishing and removal, team account creation and non-super-admin activation/deactivation, blog drafts/submission/review/rejection/approval/publication/archive/restore, published-only public feed/preview, stale-edit protection, CSRF validation, password hashing/lockout, audit records, EF migrations and application/dependency health checks.
 
-Still to build: R2 presigned uploads and verification, media/albums/YouTube, testimonials, popups, events, page/settings management, password recovery/initial-password change/MFA, role reassignment, and connecting the existing website UI to the public API. `Infrastructure/R2Options.cs` and backend-only environment settings define the storage configuration; **uploads are not implemented yet**. Categories/tags remain text fields and blog bodies are plain text. MediaManager and CommunicationsManager can access the overview; their content tools are pending.
+Still to build: videos/YouTube, testimonials, popups, events, page/settings management, password recovery/initial-password change/MFA and role reassignment. The gallery widget is supplied below for connecting the existing website; it has not been installed on the live site. Categories/tags remain text fields and blog bodies are plain text. MediaManager and SuperAdmin can manage photos. CommunicationsManager tools remain pending.
 
 ## Docker quick start
 
@@ -39,7 +39,7 @@ docker compose --env-file .env -f deploy/docker-compose.yml run --rm backend --i
 docker compose --env-file .env -f deploy/docker-compose.yml up -d
 ```
 
-Open **http://localhost:5080/** and sign in with the configured initial account. Use **Blog articles** to write or review, **Team members** to add users and **Activity log** to inspect actions. `/public/` is a preview of the CMS feed, not a replacement for the ministry website.
+Open **http://localhost:5080/** and sign in with the configured initial account. Use **Photo gallery** to manage albums and upload images, **Blog articles** to write or review, **Team members** to add users and **Activity log** to inspect actions. `/public/gallery` previews the photo gallery; `/public/` is a preview of the blog feed, not a replacement for the ministry website.
 
 The backend and PostgreSQL have **no published host ports**. Only MVC is bound to `127.0.0.1:5080` for the host Nginx proxy. The private network isolates the database; backend egress is enabled for future R2/email connections. Data Protection keys and database contents persist in named volumes. `down -v` destroys the volumes and their data.
 
@@ -68,6 +68,7 @@ For migrations: `dotnet tool restore`, then `dotnet ef migrations add YourChange
 | --- | --- |
 | `/`, `/admin/` | Authenticated overview |
 | `/account/login` | Anonymous sign-in |
+| `/admin/gallery` | MediaManager, SuperAdmin |
 | `/admin/blogs` | Writer, BlogEditor, SuperAdmin |
 | `/admin/users`, `/admin/audit` | SuperAdmin |
 | `/public/` | Anonymous CMS blog preview |
@@ -78,6 +79,8 @@ For migrations: `dotnet tool restore`, then `dotnet ef migrations add YourChange
 | `GET /api/public/blog`, `GET /api/public/blog/{slug}` | Published articles only |
 | `GET/POST /api/users`, `PUT /api/users/{id}/active` | Account management policy |
 | `GET /api/audit` | Audit read policy |
+| `/api/gallery/albums`, `/api/gallery/uploads`, `/api/gallery/images/{id}` | Gallery management policy |
+| `GET /api/public/gallery/albums`, `GET /api/public/gallery/albums/{slug}` | Published albums and completed/published photos only |
 
 Mutations need `X-CSRF-TOKEN` and the paired cookie. Refresh the token after sign-in or a session change. Editing/workflow requests include the current `version`; stale writes return 409. Published content must be archived/restored before editing and reviewing again. Disabling an account invalidates API sessions and MVC access on the next request.
 
@@ -89,7 +92,7 @@ node --check Frontend/wwwroot/admin/app.js
 node --check Frontend/wwwroot/public/app.js
 ```
 
-CI builds both projects, starts PostgreSQL 17, applies migrations, runs both apps, and executes `python3 Tests/integration.py` through MVC. Checks cover page policies, cookies/session isolation, CSRF, API roles, ownership, editorial states, public visibility, audit entries and disabled accounts. CI also validates Compose and builds both images. The integration test creates accounts/content: use a disposable database only. Set `Bootstrap__Email` and `Bootstrap__Password` to that test instance's account; optionally set `FHGM_TEST_URL` (default 5080) and `FHGM_BACKEND_TEST_URL` (default 5081).
+CI builds both projects, starts PostgreSQL 17, applies migrations, runs both apps, and executes `python3 Tests/gallery_integration.py` through MVC using Moto as a disposable S3-compatible storage server. Checks cover page policies, cookies/session isolation, CSRF, API roles, ownership, editorial states, public visibility, audit entries, disabled accounts, signed image uploads, file signatures, publication, unpublishing, removal and upload URL replay protection. `Tests/gallery_integration.py` includes the core integration suite automatically. CI also validates Compose and builds both images. The integration test creates accounts/content: use a disposable database only. Set `Bootstrap__Email` and `Bootstrap__Password` to that test instance's account; optionally set `FHGM_TEST_URL` (default 5080) and `FHGM_BACKEND_TEST_URL` (default 5081).
 
 `deploy.yml` is a **manual, main-only deployment workflow**. Configure the protected `production` environment, required reviewers, `VPS_PATH` variable and secrets `VPS_HOST`, `VPS_USER`, `VPS_SSH_PRIVATE_KEY`, `VPS_SSH_KNOWN_HOSTS`. Prepare the checkout, private `.env`, backups and Nginx/certificates on the VPS first. The workflow deploys the selected main commit, builds both services, applies migrations and checks readiness. It does not roll back schema changes automatically. No VPS deployment has been performed by adding this workflow.
 
@@ -106,3 +109,43 @@ docker compose --env-file .env -f deploy/docker-compose.yml --profile monitoring
 Kuma binds to `127.0.0.1:3001`; access through an SSH tunnel or a separately secured admin vhost. Complete its initial account setup. Add HTTP monitors for `http://frontend:8080/health/ready` and `http://backend:8080/health/ready`, plus your actual public website URL. Configure notification channels there; no alert credentials are shipped.
 
 Forwarded headers are accepted only from explicitly trusted proxy addresses. Configure the host proxy address for accurate MVC request metadata. Compose assigns MVC `172.30.48.10` on the private network and the backend trusts only that proxy address for the forwarded scheme/client IP. If that subnet conflicts with your VPS, change both the network allocation and backend trusted address together. Configure `NGINX_PROXY_ADDRESS` to the exact host proxy peer address so HTTPS is recognized through both hops; secure CSRF cookies require it. Health and sign-in checks should be verified through real HTTPS before rollout. Add backups/restore checks, operational alerts and production hardening before storing live client content.
+
+
+## Gallery setup and staff workflow
+
+The gallery is intended for FHGM staff to maintain the website without editing HTML, pushing to GitHub or asking a developer to add each photo.
+
+An administrator must do the one-time setup:
+
+1. Create a Cloudflare R2 bucket and a token scoped to **Object Read & Write for that bucket only**.
+2. Set `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `R2_PUBLIC_BASE_URL` in the private `.env`. Use a public media custom domain for the final public image URLs, such as your own configured media subdomain. Do not use the S3 API endpoint as the public image URL.
+3. Apply `deploy/r2-cors.json` to the bucket. Replace origins with the exact portal origins, without trailing slashes; remove the localhost origin in production. The browser's presigned PUT must send the same Content-Type used when requesting the upload.
+4. Add an R2 lifecycle rule deleting objects under `staging/` after one day, as a fallback for abandoned uploads or deleted records. The backend also retries cleanup of removed/expired uploads and completed staging objects every five minutes.
+5. Create **MediaManager** accounts for staff who should upload and publish gallery photos. Writers do not have gallery permissions.
+6. Connect the public website once using the widget below, then verify uploads/publication through the real portal, R2 bucket and website before giving staff access.
+
+Staff workflow:
+
+1. Open **Photo gallery** and create an album, such as Sunday Service or Youth Conference.
+2. Select photos and choose **Upload to this album**. JPEG, PNG and WebP are supported, up to 10 MB each and 20 files per batch.
+3. Add useful image descriptions (alt text), optional captions, and select **Publish photo**. Save each photo.
+4. Select **Publish album on the website** and save. Photos appear only when both the album and photo are published.
+5. Uncheck publication to hide a photo/album from the gallery, or remove a photo to queue storage deletion.
+
+Uploads go straight from the browser to a short-lived R2 PUT URL, so the VPS does not store image files. The backend checks object size, content type and file signature. It conditionally copies verified bytes from a staging key to a separate final key; reusing an upload URL cannot overwrite a verified final image. Album/image changes and their audit records commit together. Failed/unfinished uploads remain hidden.
+
+**Visibility:** unpublishing removes an image from public gallery feeds immediately. If the media bucket/domain is public, a previously known direct image URL can still be opened. Removal hides the photo immediately and queues R2 deletion after the upload URL expires; cached public copies may outlive that deletion. Use a private delivery design if direct URLs must be revocable. The current implementation verifies image signatures, not full decoding, malware scanning, resizing or EXIF removal.
+
+## Connect the existing website gallery once
+
+Review and include `deploy/nginx/gallery-location.conf.example` in the existing website HTTPS vhost. It exposes only anonymous gallery reads and the two widget assets. Keep admin routes on the portal host. In the gallery page, replace its hard-coded photo grid with:
+
+```html
+<link rel="stylesheet" href="/cms/gallery-widget.css">
+<div data-fhgm-gallery data-api="/api/public/gallery"></div>
+<script src="/cms/gallery-widget.js" defer></script>
+```
+
+The widget reads albums/photos from the API, includes pagination and lets visitors open full images. Subsequent staff uploads and publication changes update the gallery without further website source edits. If the website is hosted somewhere other than the VPS, configure the equivalent same-origin proxy or a deliberate read-only public API integration there. These instructions and assets do **not** modify the live website automatically.
+
+Local storage tests use the loopback Moto emulator only: `python -m pip install -r Tests/requirements.txt`, start `python -m moto.server -H 127.0.0.1 -p 9002`, then `python Tests/setup_storage.py`. Set the Development-only R2 endpoint override and test settings shown in `.github/workflows/ci.yml` for the backend, plus matching non-secret media origins for MVC. Do not use emulator settings in production. Native PostgreSQL and both container builds are verified in CI; a real R2 connection still requires your own credentials, CORS and public domain setup.

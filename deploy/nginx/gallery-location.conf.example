@@ -1,0 +1,15 @@
+# Optional locations inside the EXISTING ministry website HTTPS server block.
+location ^~ /api/public/gallery {
+    limit_except GET { deny all; }
+    proxy_pass http://127.0.0.1:5080;
+    proxy_set_header Host admin.hisgraceministries.co.za;
+    proxy_set_header Cookie "";
+}
+location = /cms/gallery-widget.js {
+    proxy_pass http://127.0.0.1:5080/public/gallery-widget.js;
+    proxy_set_header Host admin.hisgraceministries.co.za;
+}
+location = /cms/gallery-widget.css {
+    proxy_pass http://127.0.0.1:5080/public/gallery-widget.css;
+    proxy_set_header Host admin.hisgraceministries.co.za;
+}

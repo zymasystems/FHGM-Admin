@@ -3,6 +3,8 @@
     <p class="eyebrow">ADMINISTRATION PORTAL</p>
     <nav aria-label="Administration">
         <a class="nav-item" asp-controller="Dashboard" asp-action="Index">Overview</a>
+        @if (User.IsInRole("SuperAdmin") || User.IsInRole("MediaManager"))
+        { <a class="nav-item" asp-controller="Dashboard" asp-action="Gallery">Photo gallery</a> }
         @if (User.IsInRole("SuperAdmin") || User.IsInRole("Writer") || User.IsInRole("BlogEditor"))
         { <a class="nav-item" asp-controller="Dashboard" asp-action="Blogs">Blog articles</a> }
         @if (User.IsInRole("SuperAdmin"))

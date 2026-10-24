@@ -11,6 +11,8 @@ public sealed class DashboardController : Controller
     public IActionResult Index() => View(new DashboardViewModel("overview"));
     [Authorize(Policy = "ManageBlogs"), HttpGet("/admin/blogs")]
     public IActionResult Blogs() => View("Index", new DashboardViewModel("blogs"));
+    [Authorize(Policy = "ManageGallery"), HttpGet("/admin/gallery")]
+    public IActionResult Gallery() => View("Index", new DashboardViewModel("gallery"));
     [Authorize(Policy = "ManageUsers"), HttpGet("/admin/users")]
     public IActionResult Users() => View("Index", new DashboardViewModel("users"));
     [Authorize(Policy = "ViewAudit"), HttpGet("/admin/audit")]

@@ -1,0 +1,7 @@
+@{ ViewData["Title"] = "Photo gallery preview"; }
+<header class="public-header"><a class="brand ministry-brand" href="https://hisgraceministries.co.za/"><img src="~/images/ministry-logo.png" alt="For His Grace Ministries"><span>For His Grace<br>Ministries</span></a><a href="/admin/gallery">Manage gallery ↗</a></header>
+<main class="public-main"><div class="public-hero"><p class="eyebrow">FOR HIS GRACE MINISTRIES</p><h1>Our church family</h1><p class="muted">Moments of worship, fellowship and service from our ministry.</p></div><div data-fhgm-gallery data-api="/api/public/gallery"></div></main>
+@section Scripts {
+    <link rel="stylesheet" href="~/public/gallery-widget.css" asp-append-version="true">
+    <script src="~/public/gallery-widget.js" asp-append-version="true" defer></script>
+}

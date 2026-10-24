@@ -28,6 +28,8 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<IBlogRepository, BlogRepository>();
 builder.Services.Configure<R2Options>(builder.Configuration.GetSection("R2"));
+builder.Services.AddScoped<GalleryStorage>();
+builder.Services.AddHostedService<GalleryCleanupService>();
 builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("postgresql", tags: ["ready"]);
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {

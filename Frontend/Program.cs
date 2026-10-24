@@ -19,6 +19,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("ManageBlogs", policy => policy.RequireRole("SuperAdmin", "Writer", "BlogEditor"));
     options.AddPolicy("ManageUsers", policy => policy.RequireRole("SuperAdmin"));
     options.AddPolicy("ViewAudit", policy => policy.RequireRole("SuperAdmin"));
+    options.AddPolicy("ManageGallery", policy => policy.RequireRole("SuperAdmin", "MediaManager"));
 });
 builder.Services.AddHealthChecks().AddCheck<BackendHealthCheck>("backend", tags: ["ready"]);
 // Set only when the peer is a known reverse proxy. Do not trust arbitrary forwarded headers.
@@ -28,13 +29,19 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     if (IPAddress.TryParse(builder.Configuration["Proxy:TrustedAddress"], out var address)) options.KnownProxies.Add(address);
 });
 var app = builder.Build();
+var mediaOrigin = Uri.TryCreate(builder.Configuration["Media:PublicBaseUrl"], UriKind.Absolute, out var mediaUri)
+    && (mediaUri.Scheme == "https" || app.Environment.IsDevelopment() && mediaUri.Scheme == "http")
+    ? mediaUri.GetLeftPart(UriPartial.Authority) : "";
+var developmentStorage = app.Environment.IsDevelopment()
+    && Uri.TryCreate(builder.Configuration["Media:DevelopmentStorageOrigin"], UriKind.Absolute, out var testUri)
+    ? testUri.GetLeftPart(UriPartial.Authority) : "";
 app.UseExceptionHandler();
 app.UseForwardedHeaders();
 app.Use(async (context, next) =>
 {
     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
     context.Response.Headers["Referrer-Policy"] = "same-origin";
-    context.Response.Headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
+    context.Response.Headers["Content-Security-Policy"] = $"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: {mediaOrigin}; connect-src 'self' https://*.r2.cloudflarestorage.com {developmentStorage}; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
     context.Response.Headers.CacheControl = "no-store";
     try { await next(); }
     catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !context.RequestAborted.IsCancellationRequested)

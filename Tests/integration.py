@@ -41,6 +41,7 @@ class Client:
         return json.loads(raw) if raw and "json" in response.headers.get("Content-Type", "") else raw
 
     def login(self, email, password):
+        self.token = self.request("/api/auth/csrf")["token"]
         result = self.request("/api/auth/login", "POST", {"email": email, "password": password})
         self.token = self.request("/api/auth/csrf")["token"]
         return result

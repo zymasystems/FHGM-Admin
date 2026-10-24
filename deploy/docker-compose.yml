@@ -47,6 +47,7 @@ services:
       ASPNETCORE_ENVIRONMENT: ${APP_ENVIRONMENT:-Development}
       ASPNETCORE_HTTP_PORTS: 8080
       Backend__BaseUrl: http://backend:8080/
+      Media__PublicBaseUrl: ${R2_PUBLIC_BASE_URL:-}
       Proxy__TrustedAddress: ${NGINX_PROXY_ADDRESS:-}
     ports:
       - "127.0.0.1:5080:8080"
