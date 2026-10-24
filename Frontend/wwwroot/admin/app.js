@@ -2,10 +2,10 @@
 const $ = id => document.getElementById(id);
 let csrf = '', me = null, current = null, activeView = document.body.dataset.view || 'overview';
 const pages = { blogs: 1, users: 1, audit: 1 };
-const isEditor = () => me.roles.some(r => ['SuperAdmin', 'BlogEditor'].includes(r));
-const isBlogTeam = () => me.roles.some(r => ['SuperAdmin', 'BlogEditor', 'Writer'].includes(r));
+const isEditor = () => me.roles.some(r => ['SuperAdmin', 'ChurchAdmin', 'BlogEditor'].includes(r));
+const isBlogTeam = () => me.roles.some(r => ['SuperAdmin', 'ChurchAdmin', 'BlogEditor', 'Writer'].includes(r));
 const date = value => value ? new Date(value).toLocaleString() : '—';
-const label = value => value.replace(/([a-z])([A-Z])/g, '$1 $2');
+const label = value => value === 'SuperAdmin' ? 'Developer Super Admin' : value.replace(/([a-z])([A-Z])/g, '$1 $2');
 function notice(message, error = false) { $('notice').textContent = message; $('notice').className = error ? 'error' : ''; }
 async function token() { const r = await fetch('/api/auth/csrf', { credentials: 'same-origin' }); if (!r.ok) throw new Error('Could not establish a secure session.'); csrf = (await r.json()).token; }
 async function api(path, method = 'GET', body) {

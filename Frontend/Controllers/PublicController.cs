@@ -11,4 +11,6 @@ public sealed class PublicController : Controller
     public IActionResult Index() => View();
     [HttpGet("/public/gallery")]
     public IActionResult Gallery() => View();
+    [HttpGet("/public/events")]
+    public IActionResult Events() => View();
 }

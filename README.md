@@ -24,9 +24,9 @@ The backend issues host-only HttpOnly session cookies through the MVC relay. The
 
 ## Implemented and planned
 
-Implemented: sign-in/logout, all five roles, gallery albums and direct-to-R2 image uploads, descriptions, publishing/unpublishing and removal, team account creation and non-super-admin activation/deactivation, blog drafts/submission/review/rejection/approval/publication/archive/restore, published-only public feed/preview, stale-edit protection, CSRF validation, password hashing/lockout, audit records, EF migrations and application/dependency health checks.
+Implemented: sign-in/logout, developer/church roles and specialist roles, gallery albums and direct-to-R2 image uploads, descriptions, publishing/unpublishing and removal, church events with automatic public expiry, scheduled popup announcements, developer monitoring, team account creation and non-super-admin activation/deactivation, blog drafts/submission/review/rejection/approval/publication/archive/restore, published-only public feed/preview, stale-edit protection, CSRF validation, password hashing/lockout, audit records, EF migrations and application/dependency health checks.
 
-Still to build: videos/YouTube, testimonials, popups, events, page/settings management, password recovery/initial-password change/MFA and role reassignment. The gallery widget is supplied below for connecting the existing website; it has not been installed on the live site. Categories/tags remain text fields and blog bodies are plain text. MediaManager and SuperAdmin can manage photos. CommunicationsManager tools remain pending.
+Still to build: videos/YouTube, testimonials, page/settings management, password recovery/initial-password change/MFA and role reassignment. The gallery widget is supplied below for connecting the existing website; it has not been installed on the live site. Categories/tags remain text fields and blog bodies are plain text. ChurchAdmin, MediaManager and SuperAdmin can manage photos. CommunicationsManager can manage events and popup announcements.
 
 ## Docker quick start
 
@@ -68,9 +68,10 @@ For migrations: `dotnet tool restore`, then `dotnet ef migrations add YourChange
 | --- | --- |
 | `/`, `/admin/` | Authenticated overview |
 | `/account/login` | Anonymous sign-in |
-| `/admin/gallery` | MediaManager, SuperAdmin |
-| `/admin/blogs` | Writer, BlogEditor, SuperAdmin |
-| `/admin/users`, `/admin/audit` | SuperAdmin |
+| `/admin/gallery` | ChurchAdmin, MediaManager, SuperAdmin |
+| `/admin/blogs` | ChurchAdmin, Writer, BlogEditor, SuperAdmin |
+| `/admin/users`, `/admin/audit`, `/admin/monitoring` | Developer SuperAdmin only |
+| `/admin/events`, `/admin/popups` | ChurchAdmin, CommunicationsManager, SuperAdmin |
 | `/public/` | Anonymous CMS blog preview |
 | `GET /api/auth/csrf`, `POST /api/auth/login` | Anonymous; POST needs the paired CSRF header/cookie |
 | `GET /api/auth/me`, `POST /api/auth/logout` | Authenticated |
@@ -92,7 +93,7 @@ node --check Frontend/wwwroot/admin/app.js
 node --check Frontend/wwwroot/public/app.js
 ```
 
-CI builds both projects, starts PostgreSQL 17, applies migrations, runs both apps, and executes `python3 Tests/gallery_integration.py` through MVC using Moto as a disposable S3-compatible storage server. Checks cover page policies, cookies/session isolation, CSRF, API roles, ownership, editorial states, public visibility, audit entries, disabled accounts, signed image uploads, file signatures, publication, unpublishing, removal and upload URL replay protection. `Tests/gallery_integration.py` includes the core integration suite automatically. CI also validates Compose and builds both images. The integration test creates accounts/content: use a disposable database only. Set `Bootstrap__Email` and `Bootstrap__Password` to that test instance's account; optionally set `FHGM_TEST_URL` (default 5080) and `FHGM_BACKEND_TEST_URL` (default 5081).
+CI builds both projects, starts PostgreSQL 17, applies migrations, runs both apps, and executes `python3 Tests/church_content_integration.py` through MVC using Moto as a disposable S3-compatible storage server. Checks cover page policies, cookies/session isolation, CSRF, API roles, ownership, editorial states, public visibility, audit entries, disabled accounts, signed image uploads, file signatures, publication, unpublishing, removal and upload URL replay protection. `Tests/church_content_integration.py` includes the core and gallery suites automatically, then verifies church/developer permissions, event expiry and popup schedules. CI also validates Compose and builds both images. The integration test creates accounts/content: use a disposable database only. Set `Bootstrap__Email` and `Bootstrap__Password` to that test instance's account; optionally set `FHGM_TEST_URL` (default 5080) and `FHGM_BACKEND_TEST_URL` (default 5081).
 
 `deploy.yml` is a **manual, main-only deployment workflow**. Configure the protected `production` environment, required reviewers, `VPS_PATH` variable and secrets `VPS_HOST`, `VPS_USER`, `VPS_SSH_PRIVATE_KEY`, `VPS_SSH_KNOWN_HOSTS`. Prepare the checkout, private `.env`, backups and Nginx/certificates on the VPS first. The workflow deploys the selected main commit, builds both services, applies migrations and checks readiness. It does not roll back schema changes automatically. No VPS deployment has been performed by adding this workflow.
 
@@ -149,3 +150,55 @@ Review and include `deploy/nginx/gallery-location.conf.example` in the existing 
 The widget reads albums/photos from the API, includes pagination and lets visitors open full images. Subsequent staff uploads and publication changes update the gallery without further website source edits. If the website is hosted somewhere other than the VPS, configure the equivalent same-origin proxy or a deliberate read-only public API integration there. These instructions and assets do **not** modify the live website automatically.
 
 Local storage tests use the loopback Moto emulator only: `python -m pip install -r Tests/requirements.txt`, start `python -m moto.server -H 127.0.0.1 -p 9002`, then `python Tests/setup_storage.py`. Set the Development-only R2 endpoint override and test settings shown in `.github/workflows/ci.yml` for the backend, plus matching non-secret media origins for MVC. Do not use emulator settings in production. Native PostgreSQL and both container builds are verified in CI; a real R2 connection still requires your own credentials, CORS and public domain setup.
+
+
+## Church administrators and developer access
+
+| Capability | Developer SuperAdmin | ChurchAdmin |
+| --- | --- | --- |
+| Gallery, blog creation/review/publication | Yes | Yes |
+| Events: create, publish, edit, delete | Yes | Yes |
+| Popup announcements: create, schedule, publish, delete | Yes | Yes |
+| Create/view/enable/disable accounts | Yes | No |
+| Application monitoring and audit logs | Yes | No |
+
+The initial bootstrap account is a **developer SuperAdmin**. Sign in with it, open **Team members**, and create a **Church Admin** account for the church. The new account can manage church content but never sees developer navigation or receives access to developer MVC/API endpoints. Existing Writer, BlogEditor and MediaManager roles remain narrower specialist roles; CommunicationsManager handles events and popups. No existing account is automatically promoted or demoted.
+
+**Monitoring** shows dependency health, backend/container uptime and memory, R2 configuration status (not a live R2 availability probe) and account/content totals. It does not expose secrets or provide full VPS metrics. Use Uptime Kuma/server monitoring for external availability and host-wide metrics. Only developer SuperAdmins can open monitoring, audit records or account management.
+
+## Events and popup notifications
+
+Open **Events** to create an event with a title, URL name, description, location, start/end date-time and publication checkbox. The end must be after the start. Date-time fields use the browser device's displayed time zone, then are stored in UTC. The API includes published ongoing/future events only while `EndsAt > now`; an expired event detail returns 404. Expired records remain visible to church administrators for reference or manual deletion. Expiry does not require a cleanup job and does not permanently delete content. The public widget also removes cards as their end time passes.
+
+Open **Popup announcements** to add a title, message, active start/end times, optional HTTPS/relative button link and priority. Only enabled announcements where `StartsAt <= now < EndsAt` are public. Higher priority items display first, one at a time. The widget remembers dismissals for the current browser session and announcement version. Editing an announcement makes the new version eligible again. It polls every minute for publication/schedule changes and closes expired popups on a one-second check. These are **website announcement popups**, not browser push notifications or emails.
+
+Public preview: **http://localhost:5080/public/events**. Admin tools: `/admin/events`, `/admin/popups`, `/admin/monitoring`. The API routes are `/api/events`, `/api/popups`, `/api/monitoring`; public routes are `GET /api/public/events`, `GET /api/public/events/{slug}` and `GET /api/public/popups/active`. Updates and deletes require the current version; deletes pass `?version=N` to avoid removing a record that someone else changed.
+
+To connect the existing public website, review `deploy/nginx/church-content-location.conf.example` and add the corresponding locations inside the website HTTPS vhost. Include these assets once on pages that should display announcements:
+
+```html
+<link rel="stylesheet" href="/cms/church-content.css">
+<script src="/cms/church-content.js" data-popups-api="/api/public/popups/active" defer></script>
+```
+
+On the events page, also add:
+
+```html
+<div data-fhgm-events data-api="/api/public/events"></div>
+```
+
+The live website is not changed by adding these files to the portal repository. Once connected, church staff manage events and popups through the portal without editing website code.
+
+### Update an existing local installation
+
+Preserve your local code edits before pulling `codex/fhgm-foundation` (commit them or resolve any Git conflicts; do not discard them). Then rebuild and apply the new migration/role seed without deleting the existing database:
+
+```powershell
+git pull --ff-only
+docker compose --env-file .env -f deploy/docker-compose.yml build
+docker compose --env-file .env -f deploy/docker-compose.yml up -d db
+docker compose --env-file .env -f deploy/docker-compose.yml run --rm backend --initialize
+docker compose --env-file .env -f deploy/docker-compose.yml up -d
+```
+
+`--initialize` adds the ChurchAdmin role and applies the event/popup migration while preserving existing users/passwords/content. Reopen the portal and create the church account from **Team members** using your developer account. Do not use `down -v` for an upgrade; it removes stored data.

@@ -6,13 +6,14 @@ namespace FHGM.Backend.Entities;
 public static class Roles
 {
     public const string SuperAdmin = "SuperAdmin";
+    public const string ChurchAdmin = "ChurchAdmin";
     public const string Writer = "Writer";
     public const string BlogEditor = "BlogEditor";
     public const string MediaManager = "MediaManager";
     public const string CommunicationsManager = "CommunicationsManager";
-    public const string BlogTeam = SuperAdmin + "," + Writer + "," + BlogEditor;
-    public const string Editors = SuperAdmin + "," + BlogEditor;
-    public static readonly string[] All = [SuperAdmin, Writer, BlogEditor, MediaManager, CommunicationsManager];
+    public const string BlogTeam = SuperAdmin + "," + ChurchAdmin + "," + Writer + "," + BlogEditor;
+    public const string Editors = SuperAdmin + "," + ChurchAdmin + "," + BlogEditor;
+    public static readonly string[] All = [SuperAdmin, ChurchAdmin, Writer, BlogEditor, MediaManager, CommunicationsManager];
 }
 
 public sealed class AppUser : IdentityUser
