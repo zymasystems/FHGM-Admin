@@ -2,6 +2,7 @@
 Uses Python's standard library. Environment credentials must match the bootstrap account.
 """
 import http.cookiejar
+import hashlib
 import json
 import os
 import uuid
@@ -123,8 +124,18 @@ assert "Welcome back" in writer.request("/admin/blogs")
 writer.token = writer.request("/api/auth/csrf")["token"]
 writer.request("/api/auth/login", "POST", {"email": w["email"], "password": PASSWORD}, expected=401)
 events = admin.request("/api/audit")["items"]
-assert any(item["action"] == "Blog:publish" and item["entityId"] == post["id"] for item in events)
-assert any(item["action"] == "UserDisabled" and item["entityId"] == w["id"] for item in events)
+def audit_hash(entity, identifier):
+    return hashlib.sha256(f"FHGM.Audit.v1:{entity}:{identifier}".encode()).hexdigest()
+
+assert any(item["action"] == "Blog:publish" and item["entityId"] == audit_hash("BlogPost", post["id"]) for item in events)
+assert any(item["action"] == "UserDisabled" and item["entityId"] == audit_hash("User", w["id"]) for item in events)
+assert events == admin.request("/api/audit")["items"]  # Stable across requests.
+for item in events:
+    assert len(item["entityId"]) == 64
+    assert item["userId"] is None or len(item["userId"]) == 64
+    assert "ipAddress" not in item
+    if item["entity"] == "User" and item["action"] in ("Login", "Logout"):
+        assert item["entityId"] == item["userId"]
 editor.request("/api/audit", expected=403)
 admin.request("/api/auth/logout", "POST", {}, expected=204)
 admin.request("/api/users", expected=401)
