@@ -1,0 +1,48 @@
+name: Build and integration checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: fhgm
+          POSTGRES_PASSWORD: ci-only-database-password
+          POSTGRES_DB: fhgm_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U fhgm -d fhgm_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      ConnectionStrings__Default: Host=localhost;Database=fhgm_test;Username=fhgm;Password=ci-only-database-password
+      Bootstrap__Email: admin@example.org
+      Bootstrap__Password: CiOnly-Admin-Tests-483!
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://127.0.0.1:5080
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: dotnet build FHGM-Admin.sln -c Release --nologo
+      - run: node --check frontend/admin/app.js && node --check frontend/public/app.js
+      - run: dotnet backend/FHGM.Admin/bin/Release/net10.0/FHGM.Admin.dll --initialize
+      - name: Exercise API and authorization against PostgreSQL
+        shell: bash
+        run: |
+          dotnet backend/FHGM.Admin/bin/Release/net10.0/FHGM.Admin.dll > /tmp/fhgm-app.log 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:5080/health/ready; then break; fi
+            sleep 1
+          done
+          if ! python3 tests/integration.py; then cat /tmp/fhgm-app.log; exit 1; fi

@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+.vs/
+.idea/
+.env
+.env.*
+!.env.example
+**/appsettings.Local.json
+**/secrets.json
+**/keys/
+__pycache__/
+*.user
+*.log
