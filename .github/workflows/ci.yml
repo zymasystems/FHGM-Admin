@@ -23,7 +23,6 @@ jobs:
       Bootstrap__Email: admin@example.org
       Bootstrap__Password: CiOnly-Admin-Tests-483!
       ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: http://127.0.0.1:5080
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -33,16 +32,25 @@ jobs:
         with:
           node-version: 22
       - run: dotnet build FHGM-Admin.sln -c Release --nologo
-      - run: node --check frontend/admin/app.js && node --check frontend/public/app.js
-      - run: dotnet backend/FHGM.Admin/bin/Release/net10.0/FHGM.Admin.dll --initialize
-      - name: Exercise API and authorization against PostgreSQL
+      - run: node --check Frontend/wwwroot/admin/app.js && node --check Frontend/wwwroot/public/app.js
+      - run: dotnet bin/Release/net10.0/FHGM.Backend.dll --initialize
+        working-directory: Backend
+      - name: Exercise MVC and private API against PostgreSQL
         shell: bash
         run: |
-          dotnet backend/FHGM.Admin/bin/Release/net10.0/FHGM.Admin.dll > /tmp/fhgm-app.log 2>&1 &
-          app_pid=$!
-          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+          (cd Backend && ASPNETCORE_URLS=http://127.0.0.1:5081 dotnet bin/Release/net10.0/FHGM.Backend.dll) > /tmp/fhgm-backend.log 2>&1 &
+          backend_pid=$!
+          (cd Frontend && ASPNETCORE_URLS=http://127.0.0.1:5080 dotnet bin/Release/net10.0/FHGM.Admin.dll) > /tmp/fhgm-frontend.log 2>&1 &
+          frontend_pid=$!
+          trap 'kill "$backend_pid" "$frontend_pid" 2>/dev/null || true' EXIT
           for attempt in {1..30}; do
             if curl -fsS http://127.0.0.1:5080/health/ready; then break; fi
             sleep 1
           done
-          if ! python3 tests/integration.py; then cat /tmp/fhgm-app.log; exit 1; fi
+          if ! python3 Tests/integration.py; then cat /tmp/fhgm-backend.log /tmp/fhgm-frontend.log; exit 1; fi
+      - name: Validate Compose and build both container images
+        env:
+          POSTGRES_PASSWORD: ci-only-build-password
+        run: |
+          docker compose -f deploy/docker-compose.yml config --quiet
+          docker compose -f deploy/docker-compose.yml build

@@ -1,0 +1,30 @@
+@model DashboardViewModel
+@{ ViewData["Title"] = "Content studio"; ViewData["ActiveView"] = Model.ActiveView; }
+<div id="workspace" class="workspace">
+    <partial name="_Sidebar" />
+    <main class="main">
+        <header class="topbar"><span>FOR HIS GRACE MINISTRIES</span><span class="status-dot">Content studio</span></header>
+        <div id="notice" role="status" aria-live="polite"></div>
+        @switch (Model.ActiveView)
+        {
+            case "blogs": <partial name="_Blogs" /> break;
+            case "users": <partial name="_Users" /> break;
+            case "audit": <partial name="_Audit" /> break;
+            default:
+                <section>
+                    <div class="page-heading"><div><p class="eyebrow">SERVING HIS PURPOSE</p><h1>Welcome, @User.Identity?.Name</h1><p class="muted">Prepare and share the stories of For His Grace Ministries.</p></div></div>
+                    <div class="summary">
+                        <div><p class="eyebrow">YOUR MINISTRY WORKSPACE</p><h2>Content with purpose</h2><p class="muted">Use the menu to access the tools available to your account.</p>
+                        @if (User.IsInRole("SuperAdmin") || User.IsInRole("Writer") || User.IsInRole("BlogEditor"))
+                        { <a class="btn btn-primary primary" asp-action="Blogs">Manage blog articles →</a> }
+                        </div>
+                        <div><p class="eyebrow">FOR HIS GRACE MINISTRIES</p><h2>Growing in Grace.<br>Living by Faith.</h2><p class="muted">This portal supports the ministry website.</p><a href="https://hisgraceministries.co.za/" target="_blank" rel="noopener">Visit the ministry website ↗</a></div>
+                    </div>
+                    <div class="panel p-4"><h2>Portal development</h2><p class="muted mb-0">Accounts and the blog editorial workflow are available. Media uploads, albums, testimonials, announcements and events will follow.</p></div>
+                </section>
+                break;
+        }
+    </main>
+</div>
+@if (Model.ActiveView == "blogs") { <partial name="_Editor" /> }
+@section Scripts { <script src="~/admin/app.js" asp-append-version="true" defer></script> }

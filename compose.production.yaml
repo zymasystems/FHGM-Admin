@@ -1,5 +1,0 @@
-# Apply alongside compose.yaml after configuring the host Nginx TLS vhost.
-services:
-  app:
-    environment:
-      ASPNETCORE_ENVIRONMENT: Production

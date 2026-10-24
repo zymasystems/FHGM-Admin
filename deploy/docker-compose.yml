@@ -1,0 +1,79 @@
+name: fhgm-admin
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: fhgm
+      POSTGRES_USER: fhgm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fhgm -d fhgm"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks: [private]
+    restart: unless-stopped
+  backend:
+    build:
+      context: ..
+      dockerfile: Backend/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${APP_ENVIRONMENT:-Development}
+      ASPNETCORE_HTTP_PORTS: 8080
+      ConnectionStrings__Default: Host=db;Database=fhgm;Username=fhgm;Password=${POSTGRES_PASSWORD}
+      Bootstrap__Email: ${BOOTSTRAP_EMAIL:-}
+      Bootstrap__Password: ${BOOTSTRAP_PASSWORD:-}
+      DataProtection__KeysPath: /home/app/.aspnet/DataProtection-Keys
+      R2__AccountId: ${R2_ACCOUNT_ID:-}
+      R2__Bucket: ${R2_BUCKET:-}
+      R2__AccessKeyId: ${R2_ACCESS_KEY_ID:-}
+      R2__SecretAccessKey: ${R2_SECRET_ACCESS_KEY:-}
+      R2__PublicBaseUrl: ${R2_PUBLIC_BASE_URL:-}
+      Proxy__TrustedAddress: 172.30.48.10
+    volumes:
+      - protection_keys:/home/app/.aspnet/DataProtection-Keys
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [private, egress]
+    restart: unless-stopped
+  frontend:
+    build:
+      context: ..
+      dockerfile: Frontend/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${APP_ENVIRONMENT:-Development}
+      ASPNETCORE_HTTP_PORTS: 8080
+      Backend__BaseUrl: http://backend:8080/
+      Proxy__TrustedAddress: ${NGINX_PROXY_ADDRESS:-}
+    ports:
+      - "127.0.0.1:5080:8080"
+    depends_on: [backend]
+    networks:
+      private:
+        ipv4_address: 172.30.48.10
+      edge:
+    restart: unless-stopped
+  uptime-kuma:
+    image: louislam/uptime-kuma:2
+    profiles: [monitoring]
+    volumes:
+      - uptime_data:/app/data
+    ports:
+      - "127.0.0.1:3001:3001"
+    networks: [private, edge]
+    restart: unless-stopped
+networks:
+  private:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.48.0/24
+  edge:
+  egress:
+volumes:
+  postgres_data:
+  protection_keys:
+  uptime_data:
