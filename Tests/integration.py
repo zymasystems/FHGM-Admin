@@ -2,9 +2,9 @@
 Uses Python's standard library. Environment credentials must match the bootstrap account.
 """
 import http.cookiejar
-import hashlib
 import json
 import os
+import re
 import uuid
 import urllib.error
 import urllib.request
@@ -124,18 +124,25 @@ assert "Welcome back" in writer.request("/admin/blogs")
 writer.token = writer.request("/api/auth/csrf")["token"]
 writer.request("/api/auth/login", "POST", {"email": w["email"], "password": PASSWORD}, expected=401)
 events = admin.request("/api/audit")["items"]
-def audit_hash(entity, identifier):
-    return hashlib.sha256(f"FHGM.Audit.v1:{entity}:{identifier}".encode()).hexdigest()
-
-assert any(item["action"] == "Blog:publish" and item["entityId"] == audit_hash("BlogPost", post["id"]) for item in events)
-assert any(item["action"] == "UserDisabled" and item["entityId"] == audit_hash("User", w["id"]) for item in events)
+assert any(item["action"] == "Blog:publish" and re.fullmatch(r"blog-\d{2,}", item["entityId"]) for item in events)
+assert any(item["action"] == "UserDisabled" and re.fullmatch(r"user-\d{2,}", item["entityId"]) for item in events)
 assert events == admin.request("/api/audit")["items"]  # Stable across requests.
 for item in events:
-    assert len(item["entityId"]) == 64
-    assert item["userId"] is None or len(item["userId"]) == 64
+    assert re.fullmatch(r"[a-z]+-\d{2,}", item["entityId"])
+    assert item["userId"] is None or re.fullmatch(r"user-\d{2,}", item["userId"])
     assert "ipAddress" not in item
+    assert post["id"] not in json.dumps(item) and w["id"] not in json.dumps(item)
     if item["entity"] == "User" and item["action"] in ("Login", "Logout"):
         assert item["entityId"] == item["userId"]
+# The first account's first login is always assigned user-01 in a fresh database.
+all_events = list(events)
+for page in range(2, (admin.request("/api/audit")["total"] + 49) // 50 + 1):
+    all_events.extend(admin.request("/api/audit?page=" + str(page))["items"])
+first_login = min((x for x in all_events if x["action"] == "Login"), key=lambda x: x["id"])
+assert first_login["userId"] == "user-01"
+# A published article keeps the same reference throughout its workflow.
+blog_labels = {x["entityId"] for x in all_events if x["entity"] == "BlogPost" and x["action"] == "Blog:publish"}
+assert len(blog_labels) == 1
 editor.request("/api/audit", expected=403)
 admin.request("/api/auth/logout", "POST", {}, expected=204)
 admin.request("/api/users", expected=401)
