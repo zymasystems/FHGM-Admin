@@ -1,0 +1,7 @@
+@{ ViewData["Title"] = "Events and announcements preview"; }
+<header class="public-header"><a class="brand ministry-brand" href="https://hisgraceministries.co.za/"><img src="~/images/ministry-logo.png" alt="For His Grace Ministries"><span>For His Grace<br>Ministries</span></a><a href="/admin/events">Manage events ↗</a></header>
+<main class="public-main"><div class="public-hero"><p class="eyebrow">FOR HIS GRACE MINISTRIES</p><h1>Gather with us</h1><p class="muted">Upcoming church gatherings, services and community events.</p></div><div data-fhgm-events data-api="/api/public/events"></div></main>
+@section Scripts {
+    <link rel="stylesheet" href="~/public/church-content.css" asp-append-version="true">
+    <script src="~/public/church-content.js" data-popups-api="/api/public/popups/active" asp-append-version="true" defer></script>
+}

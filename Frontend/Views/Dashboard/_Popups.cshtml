@@ -1,0 +1,19 @@
+<section id="content-manager" data-content-kind="popups">
+    <div class="page-heading"><div><p class="eyebrow">KEEP YOUR COMMUNITY INFORMED</p><h1>Popup announcements</h1><p class="muted">Schedule website popup notifications and choose when they stop appearing.</p></div><a href="/public/events" target="_blank" rel="noopener" class="btn outline">Preview website ↗</a></div>
+    <div class="panel p-4"><div class="d-flex justify-content-between gap-3 flex-wrap mb-4"><h2 id="content-form-title">New announcement</h2><button id="content-new" class="btn outline" type="button">+ New announcement</button></div>
+        <form id="content-form" class="form-grid">
+            <label class="full">Title<input class="form-control" name="title" maxlength="180" required></label>
+            <label class="full">Message<textarea class="form-control" name="message" rows="4" maxlength="3000" required></textarea></label>
+            <label>Starts at<input class="form-control" name="startsAt" type="datetime-local" required></label>
+            <label>Ends at<input class="form-control" name="endsAt" type="datetime-local" required></label>
+            <p id="content-time-zone" class="small muted full"></p>
+            <label>Button text (optional)<input class="form-control" name="buttonText" maxlength="80" placeholder="View event"></label>
+            <label>Button link (optional)<input class="form-control" name="buttonUrl" maxlength="1000" placeholder="https://hisgraceministries.co.za/events.html"></label>
+            <label>Priority (0–100)<input class="form-control" name="priority" type="number" min="0" max="100" value="0" required><span class="small muted">Higher priority announcements appear first.</span></label>
+            <label class="check-label"><input name="isPublished" type="checkbox"> Enable announcement</label>
+            <p class="small muted full">Only enabled announcements within their scheduled dates appear. Visitors see an announcement once per browser session; saving changes makes it eligible to appear again.</p>
+            <div class="full"><button class="btn primary" type="submit">Save announcement</button></div>
+        </form>
+    </div>
+    <div class="panel"><div class="panel-heading"><h2>All announcements</h2><button id="content-refresh" class="btn outline" type="button">Refresh</button></div><div class="table-wrap"><table class="table table-hover"><thead><tr><th>ANNOUNCEMENT</th><th>STATUS</th><th>START</th><th>END</th><th>ACTIONS</th></tr></thead><tbody id="content-rows"></tbody></table></div><p id="content-empty" class="empty" hidden>No popup announcements yet.</p><div class="pager"><button id="content-prev" class="btn outline" type="button">Previous</button><span id="content-page"></span><button id="content-next" class="btn outline" type="button">Next</button></div></div>
+</section>

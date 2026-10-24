@@ -17,4 +17,10 @@ public sealed class DashboardController : Controller
     public IActionResult Users() => View("Index", new DashboardViewModel("users"));
     [Authorize(Policy = "ViewAudit"), HttpGet("/admin/audit")]
     public IActionResult Audit() => View("Index", new DashboardViewModel("audit"));
+    [Authorize(Policy = "ManageEvents"), HttpGet("/admin/events")]
+    public IActionResult Events() => View("Index", new DashboardViewModel("events"));
+    [Authorize(Policy = "ManagePopups"), HttpGet("/admin/popups")]
+    public IActionResult Popups() => View("Index", new DashboardViewModel("popups"));
+    [Authorize(Policy = "ViewMonitoring"), HttpGet("/admin/monitoring")]
+    public IActionResult Monitoring() => View("Index", new DashboardViewModel("monitoring"));
 }

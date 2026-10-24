@@ -95,7 +95,7 @@ public sealed class GalleryController(AppDbContext db, GalleryStorage storage, A
     {
         var image = await db.GalleryImages.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
         if (image is null) return NotFound();
-        if (image.UploadedBy != User.FindFirstValue(ClaimTypes.NameIdentifier) && !User.IsInRole(Roles.SuperAdmin)) return Forbid();
+        if (image.UploadedBy != User.FindFirstValue(ClaimTypes.NameIdentifier) && !User.IsInRole(Roles.SuperAdmin) && !User.IsInRole(Roles.ChurchAdmin)) return Forbid();
         if (image.IsComplete) return Ok(new { image.Id, image.Version });
         if (DateTimeOffset.UtcNow > image.UploadExpiresAt.AddMinutes(5)) return Conflict(new { message = "This upload has expired. Remove it and choose the image again." });
         if (!storage.IsConfigured) return StatusCode(503, new { message = "Gallery storage is not configured." });

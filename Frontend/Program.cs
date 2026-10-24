@@ -16,10 +16,13 @@ builder.Services.AddTransient<BackendClient>(services => new BackendClient(servi
 builder.Services.AddAuthentication("BackendSession").AddScheme<AuthenticationSchemeOptions, BackendSessionHandler>("BackendSession", _ => { });
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("ManageBlogs", policy => policy.RequireRole("SuperAdmin", "Writer", "BlogEditor"));
+    options.AddPolicy("ManageBlogs", policy => policy.RequireRole("SuperAdmin", "ChurchAdmin", "Writer", "BlogEditor"));
     options.AddPolicy("ManageUsers", policy => policy.RequireRole("SuperAdmin"));
     options.AddPolicy("ViewAudit", policy => policy.RequireRole("SuperAdmin"));
-    options.AddPolicy("ManageGallery", policy => policy.RequireRole("SuperAdmin", "MediaManager"));
+    options.AddPolicy("ViewMonitoring", policy => policy.RequireRole("SuperAdmin"));
+    options.AddPolicy("ManageEvents", policy => policy.RequireRole("SuperAdmin", "ChurchAdmin", "CommunicationsManager"));
+    options.AddPolicy("ManagePopups", policy => policy.RequireRole("SuperAdmin", "ChurchAdmin", "CommunicationsManager"));
+    options.AddPolicy("ManageGallery", policy => policy.RequireRole("SuperAdmin", "ChurchAdmin", "MediaManager"));
 });
 builder.Services.AddHealthChecks().AddCheck<BackendHealthCheck>("backend", tags: ["ready"]);
 // Set only when the peer is a known reverse proxy. Do not trust arbitrary forwarded headers.

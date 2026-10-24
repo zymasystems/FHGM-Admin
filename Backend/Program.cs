@@ -25,6 +25,7 @@ var keysPath = builder.Configuration["DataProtection:KeysPath"];
 if (!string.IsNullOrWhiteSpace(keysPath))
     builder.Services.AddDataProtection().SetApplicationName("FHGM").PersistKeysToFileSystem(new DirectoryInfo(keysPath));
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<IBlogRepository, BlogRepository>();
 builder.Services.Configure<R2Options>(builder.Configuration.GetSection("R2"));

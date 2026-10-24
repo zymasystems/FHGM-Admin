@@ -1,0 +1,17 @@
+<section id="content-manager" data-content-kind="events">
+    <div class="page-heading"><div><p class="eyebrow">GATHER · WORSHIP · SERVE</p><h1>Events</h1><p class="muted">Publish church events. They disappear from the public feed after their end time.</p></div><a href="/public/events" target="_blank" rel="noopener" class="btn outline">Preview events ↗</a></div>
+    <div class="panel p-4"><div class="d-flex justify-content-between gap-3 flex-wrap mb-4"><h2 id="content-form-title">New event</h2><button id="content-new" class="btn outline" type="button">+ New event</button></div>
+        <form id="content-form" class="form-grid">
+            <label>Event title<input class="form-control" name="title" maxlength="180" required></label>
+            <label>URL name<input class="form-control" name="slug" maxlength="200" pattern="[a-z0-9]+(-[a-z0-9]+)*" required placeholder="youth-conference"></label>
+            <label class="full">Description<textarea class="form-control" name="description" rows="4" maxlength="5000" required></textarea></label>
+            <label class="full">Location<input class="form-control" name="location" maxlength="300" required></label>
+            <label>Starts at<input class="form-control" name="startsAt" type="datetime-local" required></label>
+            <label>Ends at<input class="form-control" name="endsAt" type="datetime-local" required></label>
+            <p class="small muted full" id="content-time-zone"></p>
+            <label class="check-label"><input name="isPublished" type="checkbox"> Publish event</label>
+            <div class="full"><button class="btn primary" type="submit">Save event</button></div>
+        </form>
+    </div>
+    <div class="panel"><div class="panel-heading"><h2>All events</h2><button id="content-refresh" class="btn outline" type="button">Refresh</button></div><div class="table-wrap"><table class="table table-hover"><thead><tr><th>EVENT</th><th>STATUS</th><th>START</th><th>END</th><th>ACTIONS</th></tr></thead><tbody id="content-rows"></tbody></table></div><p id="content-empty" class="empty" hidden>No events yet. Create your first church event above.</p><div class="pager"><button id="content-prev" class="btn outline" type="button">Previous</button><span id="content-page"></span><button id="content-next" class="btn outline" type="button">Next</button></div></div>
+</section>
