@@ -8,6 +8,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
 {
     public DbSet<BlogPost> BlogPosts => Set<BlogPost>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<AuditReference> AuditReferences => Set<AuditReference>();
     public DbSet<GalleryAlbum> GalleryAlbums => Set<GalleryAlbum>();
     public DbSet<GalleryImage> GalleryImages => Set<GalleryImage>();
     public DbSet<MinistryEvent> Events => Set<MinistryEvent>();
@@ -19,6 +20,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         builder.Entity<BlogPost>().Property(x => x.Version).IsConcurrencyToken();
         builder.Entity<BlogPost>().HasOne(x => x.Author).WithMany().HasForeignKey(x => x.AuthorId).OnDelete(DeleteBehavior.Restrict);
         builder.Entity<AuditLog>().HasIndex(x => x.CreatedAt);
+        builder.Entity<AuditReference>().HasIndex(x => new { x.Entity, x.Identifier }).IsUnique();
         builder.Entity<GalleryAlbum>().HasIndex(x => x.Slug).IsUnique();
         builder.Entity<GalleryAlbum>().Property(x => x.Version).IsConcurrencyToken();
         builder.Entity<GalleryImage>().Property(x => x.Version).IsConcurrencyToken();

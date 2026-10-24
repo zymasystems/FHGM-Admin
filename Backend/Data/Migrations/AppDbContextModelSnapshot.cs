@@ -134,6 +134,32 @@ namespace FHGM.Backend.Data.Migrations
                     b.ToTable("AuditLogs");
                 });
 
+            modelBuilder.Entity("FHGM.Backend.Entities.AuditReference", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Entity")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("Identifier")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Entity", "Identifier")
+                        .IsUnique();
+
+                    b.ToTable("AuditReferences");
+                });
+
             modelBuilder.Entity("FHGM.Backend.Entities.BlogPost", b =>
                 {
                     b.Property<Guid>("Id")

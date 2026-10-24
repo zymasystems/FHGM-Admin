@@ -45,8 +45,19 @@ jobs:
       - run: python -m pip install -r Tests/requirements.txt
       - run: dotnet build FHGM-Admin.sln -c Release --nologo
       - run: node --check Frontend/wwwroot/admin/app.js && node --check Frontend/wwwroot/public/app.js && node --check Frontend/wwwroot/admin/gallery.js && node --check Frontend/wwwroot/public/gallery-widget.js && node --check Frontend/wwwroot/admin/church-content.js && node --check Frontend/wwwroot/admin/monitoring.js && node --check Frontend/wwwroot/public/church-content.js
+      - name: Prepare historical activity before the reference migration
+        env:
+          PGPASSWORD: ci-only-database-password
+        run: |
+          dotnet tool restore
+          dotnet tool run dotnet-ef database update 20261024182751_AddChurchEventsAndPopups --project Backend --configuration Release --no-build
+          psql -h localhost -U fhgm -d fhgm_test -v ON_ERROR_STOP=1 -f Tests/audit_reference_history.sql
       - run: dotnet bin/Release/net10.0/FHGM.Backend.dll --initialize
         working-directory: Backend
+      - name: Verify historical references and transactional allocation
+        env:
+          PGPASSWORD: ci-only-database-password
+        run: psql -h localhost -U fhgm -d fhgm_test -v ON_ERROR_STOP=1 -f Tests/audit_reference_upgrade.sql
       - name: Exercise MVC and private API against PostgreSQL
         shell: bash
         run: |
