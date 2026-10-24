@@ -1,0 +1,11 @@
+@model LoginViewModel
+@{ ViewData["Title"] = "Sign in"; }
+<section id="login-screen" class="login-shell">
+  <div class="login-story"><a class="brand ministry-brand" href="https://hisgraceministries.co.za/"><img src="/images/ministry-logo.png" alt="For His Grace Ministries"><span>For His Grace<br>Ministries</span></a><p class="eyebrow">FOR HIS GRACE MINISTRIES</p><h1>One ministry.<br>A shared voice.</h1><p>A place to prepare, review and share the stories of our ministry.</p><div class="story-foot">CONTENT & COMMUNITY · FHGM</div></div>
+  <div class="login-panel"><div class="login-box"><p class="eyebrow">ADMINISTRATION</p><h2>Welcome back</h2><p class="muted">Sign in with your ministry account to continue.</p>
+    <form id="login-form" data-return-url="@Model.ReturnUrl"><label>Email address<input class="form-control" name="email" type="email" autocomplete="username" required></label><label>Password<input class="form-control" name="password" type="password" autocomplete="current-password" required></label><button type="submit" class="btn btn-primary primary">Sign in <span aria-hidden="true">→</span></button></form>
+    <p id="login-error" role="alert" class="error"></p><p class="muted small">Need an account or help signing in? Contact your FHGM administrator.</p><a href="https://hisgraceministries.co.za/">Back to the ministry website ↗</a>
+  </div></div>
+</section>
+
+@section Scripts { <script src="~/admin/app.js" asp-append-version="true" defer></script> }

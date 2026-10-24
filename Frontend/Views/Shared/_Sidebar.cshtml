@@ -1,0 +1,22 @@
+<aside class="sidebar">
+    <a class="brand ministry-brand" asp-controller="Dashboard" asp-action="Index"><img src="~/images/ministry-logo.png" alt="For His Grace Ministries"><span>For His Grace<br>Ministries</span></a>
+    <p class="eyebrow">ADMINISTRATION PORTAL</p>
+    <nav aria-label="Administration">
+        <a class="nav-item" asp-controller="Dashboard" asp-action="Index">Overview</a>
+        @if (User.IsInRole("SuperAdmin") || User.IsInRole("MediaManager"))
+        { <a class="nav-item" asp-controller="Dashboard" asp-action="Gallery">Photo gallery</a> }
+        @if (User.IsInRole("SuperAdmin") || User.IsInRole("Writer") || User.IsInRole("BlogEditor"))
+        { <a class="nav-item" asp-controller="Dashboard" asp-action="Blogs">Blog articles</a> }
+        @if (User.IsInRole("SuperAdmin"))
+        {
+            <a class="nav-item" asp-controller="Dashboard" asp-action="Users">Team members</a>
+            <a class="nav-item" asp-controller="Dashboard" asp-action="Audit">Activity log</a>
+        }
+    </nav>
+    <div class="sidebar-bottom">
+        <a href="https://hisgraceministries.co.za/" target="_blank" rel="noopener">View ministry website ↗</a>
+        <a href="/public/" target="_blank" rel="noopener">Preview CMS blog feed ↗</a>
+        <p id="identity">@User.Identity?.Name</p>
+        <button id="logout" class="btn btn-outline-secondary outline">Sign out</button>
+    </div>
+</aside>

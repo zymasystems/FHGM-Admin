@@ -1,0 +1,55 @@
+name: Deploy reviewed commit to VPS
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: fhgm-production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    # Set required reviewers and main-only branch restrictions on this environment.
+    environment: production
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up verified SSH host
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.VPS_SSH_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Deploy selected main commit
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PATH: ${{ vars.VPS_PATH }}
+          DEPLOY_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$VPS_HOST" =~ ^[a-zA-Z0-9.-]+$ ]]
+          [[ "$VPS_USER" =~ ^[a-zA-Z0-9_-]+$ ]]
+          [[ "$VPS_PATH" =~ ^/[a-zA-Z0-9_./-]+$ ]]
+          [[ "$DEPLOY_SHA" =~ ^[a-f0-9]{40}$ ]]
+          ssh -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" bash -s -- "$VPS_PATH" "$DEPLOY_SHA" <<'REMOTE'
+          set -euo pipefail
+          cd "$1"
+          test -z "$(git status --porcelain)"
+          git fetch origin main
+          git merge-base --is-ancestor "$2" origin/main
+          git checkout --detach "$2"
+          test -f .env
+          docker compose --env-file .env -f deploy/docker-compose.yml build
+          docker compose --env-file .env -f deploy/docker-compose.yml run --rm backend --initialize
+          docker compose --env-file .env -f deploy/docker-compose.yml up -d
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:5080/health/ready; then exit 0; fi
+            sleep 2
+          done
+          exit 1
+          REMOTE

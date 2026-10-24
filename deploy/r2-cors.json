@@ -1,0 +1,9 @@
+[
+  {
+    "AllowedOrigins": ["https://admin.hisgraceministries.co.za", "http://localhost:5080"],
+    "AllowedMethods": ["PUT", "GET", "HEAD"],
+    "AllowedHeaders": ["Content-Type"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]

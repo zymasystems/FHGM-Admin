@@ -1,0 +1,10 @@
+# Optional location INSIDE the existing ministry website HTTPS server block.
+# Exposes only published blog GET endpoints on the website's own origin.
+# The existing website still needs JavaScript/UI changes to consume this feed.
+location ^~ /api/public/blog {
+    limit_except GET { deny all; }
+    proxy_pass http://127.0.0.1:5080;
+    proxy_set_header Host admin.hisgraceministries.co.za;
+    proxy_set_header Cookie "";
+    proxy_set_header X-CSRF-TOKEN "";
+}
