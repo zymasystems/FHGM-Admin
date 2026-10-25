@@ -3,6 +3,9 @@ name: Deploy FHGM Admin to VPS
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
