@@ -3,9 +3,6 @@ name: Deploy FHGM Admin to VPS
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 permissions:
   contents: read
@@ -27,6 +24,7 @@ jobs:
         env:
           SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
           SSH_KNOWN_HOSTS: ${{ secrets.VPS_SSH_KNOWN_HOSTS }}
+        shell: bash
         run: |
           set -euo pipefail
           test -n "$SSH_PRIVATE_KEY"
@@ -36,7 +34,7 @@ jobs:
           printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
 
-      - name: Deploy selected main commit
+      - name: Deploy reviewed commit
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
@@ -51,6 +49,7 @@ jobs:
           [[ "$DEPLOY_SHA" =~ ^[a-f0-9]{40}$ ]]
 
           ssh -o StrictHostKeyChecking=yes \
+            -o IdentitiesOnly=yes \
             "$VPS_USER@$VPS_HOST" \
             bash -s -- "$VPS_PATH" "$DEPLOY_SHA" <<'REMOTE'
           set -euo pipefail
@@ -62,6 +61,7 @@ jobs:
           git checkout --detach "$2"
           test -f .env
 
+          docker compose --env-file .env -f deploy/docker-compose.yml config --quiet
           docker compose --env-file .env -f deploy/docker-compose.yml build
           docker compose --env-file .env -f deploy/docker-compose.yml up -d
 
