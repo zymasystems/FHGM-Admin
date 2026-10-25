@@ -50,7 +50,7 @@ services:
       Media__PublicBaseUrl: ${R2_PUBLIC_BASE_URL:-}
       Proxy__TrustedAddress: ${NGINX_PROXY_ADDRESS:-}
     ports:
-      - "127.0.0.1:5080:8080"
+      - "127.0.0.1:5081:8080"
     depends_on: [backend]
     networks:
       private:
