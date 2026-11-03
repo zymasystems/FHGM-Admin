@@ -1,6 +1,27 @@
 """Includes core/gallery suites, then checks church/developer boundaries and scheduled content."""
 import datetime as dt
 import time
+import os
+import urllib.request
+import urllib.error
+
+# The public website may read anonymous feeds, never staff APIs or credentials.
+base = os.environ.get('FHGM_TEST_URL', 'http://127.0.0.1:5080').rstrip('/')
+for origin in ['https://hisgraceministries.co.za', 'https://www.hisgraceministries.co.za', 'https://untrusted.example']:
+    for path in ['/api/public/blog', '/api/public/events', '/api/public/gallery/albums', '/api/auth/me']:
+        request = urllib.request.Request(base + path, headers={'Origin': origin})
+        try:
+            response = urllib.request.urlopen(request)
+        except urllib.error.HTTPError as error:
+            response = error
+        with response:
+            allowed = response.headers.get('Access-Control-Allow-Origin')
+            assert allowed == (origin if path.startswith('/api/public/') and origin != 'https://untrusted.example' else None), (path, origin, allowed)
+            assert response.headers.get('Access-Control-Allow-Credentials') is None
+request = urllib.request.Request(base + '/api/public/blog', method='OPTIONS', headers={
+    'Origin': 'https://hisgraceministries.co.za', 'Access-Control-Request-Method': 'POST'})
+with urllib.request.urlopen(request) as response:
+    assert 'POST' not in response.headers.get('Access-Control-Allow-Methods', '')
 import gallery_integration
 from integration import Client, PASSWORD, PREFIX, admin, anonymous
 import integration as checks
@@ -80,3 +101,4 @@ actions = admin.request('/api/audit')['items']
 assert any(x['action'] == 'EventDeleted' for x in actions)
 assert any(x['action'] == 'PopupDeleted' for x in actions)
 print(f'PASS: {checks.checks} HTTP checks including ChurchAdmin boundaries, developer monitoring, events, expiry and popup schedules.')
+

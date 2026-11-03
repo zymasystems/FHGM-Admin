@@ -7,6 +7,10 @@ using Microsoft.AspNetCore.HttpOverrides;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddProblemDetails();
 builder.Services.AddControllersWithViews();
+// GitHub Pages reads published content from the portal without staff cookies.
+builder.Services.AddCors(options => options.AddPolicy("PublicWebsite", policy => policy
+    .WithOrigins("https://hisgraceministries.co.za", "https://www.hisgraceministries.co.za")
+    .WithMethods("GET")));
 var backendUrl = builder.Configuration["Backend:BaseUrl"] ?? "http://127.0.0.1:5081/";
 if (!Uri.TryCreate(backendUrl, UriKind.Absolute, out var backendUri) || backendUri.Scheme is not ("http" or "https") || !string.IsNullOrEmpty(backendUri.UserInfo))
     throw new InvalidOperationException("Backend__BaseUrl must be an HTTP(S) URL.");
@@ -52,6 +56,9 @@ app.Use(async (context, next) =>
 });
 app.UseStaticFiles();
 app.UseRouting();
+// Keep CORS off login, staff APIs and all mutation routes.
+app.UseWhen(context => context.Request.Path.StartsWithSegments("/api/public"),
+    branch => branch.UseCors("PublicWebsite"));
 app.Map("/api/{**path}", async (HttpContext context, BackendClient backend) => await backend.RelayAsync(context));
 app.UseAuthentication();
 app.UseAuthorization();
@@ -59,3 +66,4 @@ app.MapControllers();
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
 app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = r => r.Tags.Contains("ready") });
 app.Run();
+
