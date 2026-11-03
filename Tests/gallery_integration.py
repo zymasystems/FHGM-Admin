@@ -38,12 +38,14 @@ def put(url, data):
 put(upload["uploadUrl"], valid)
 result = media.request(image_path + "/complete", "POST", {})
 assert result["version"] == 2
+assert media.request(image_path + '/retry', 'POST', {})['isComplete'] is True
 # A completed image is idempotent and stays hidden until separately published.
 media.request(image_path + "/complete", "POST", {})
 assert not any(a["slug"] == album["slug"] for a in public.request("/api/public/gallery/albums")["items"])
 album = media.request(album_path, "PUT", {**album_body, "isPublished": True, "version": album["version"]})
 assert public.request(public_path)["items"] == []
 image = media.request(image_path, "PUT", {"altText": "Sunday worship", "caption": "Our church family", "isPublished": True, "version": 2})
+album = media.request(album_path, "PUT", {**album_body, "isPublished": True, "version": album["version"], "coverImageId": image["id"]})
 published = public.request(public_path)
 assert len(published["items"]) == 1 and published["items"][0]["altText"] == "Sunday worship"
 public_url = published["items"][0]["url"]
@@ -55,6 +57,8 @@ assert any(a["slug"] == album["slug"] for a in public.request("/api/public/galle
 media.request(image_path, "PUT", {"altText": "Sunday worship", "caption": "", "isPublished": False, "version": 1}, expected=409)
 image = media.request(image_path, "PUT", {"altText": "Sunday worship", "caption": "", "isPublished": False, "version": image["version"]})
 assert public.request(public_path)["items"] == []
+album = media.request(album_path, "PUT", {**album_body, "isPublished": True, "version": album["version"], "coverImageId": image["id"]})
+assert next(a for a in media.request('/api/gallery/albums')['items'] if a['id'] == album['id'])['coverImageId'] is None
 image = media.request(image_path, "PUT", {"altText": "Sunday worship", "caption": "", "isPublished": True, "version": image["version"]})
 album = media.request(album_path, "PUT", {**album_body, "isPublished": False, "version": album["version"]})
 public.request(public_path, expected=404)
@@ -69,3 +73,4 @@ actions = admin.request("/api/audit")["items"]
 assert any(a["action"] == "ImageUploadCompleted" for a in actions)
 assert any(a["action"] == "ImageRemoved" for a in actions)
 print(f"PASS: {suite.checks} HTTP checks including gallery roles, signed PUTs, file verification, immutable final images, publication, removal and audit.")
+

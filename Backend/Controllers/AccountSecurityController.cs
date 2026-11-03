@@ -54,6 +54,7 @@ public sealed class AccountSecurityController(UserManager<AppUser> users, SignIn
         if (!await PasswordValid(user, request.Password)) return Invalid();
         if (await users.GetTwoFactorEnabledAsync(user)) return Conflict(new { message = "Authenticator is already enabled." });
         if (await users.GetAuthenticatorKeyAsync(user) is null && !(await users.ResetAuthenticatorKeyAsync(user)).Succeeded) return Conflict();
+        await signIn.RefreshSignInAsync(user);
         return Ok(new { key = await users.GetAuthenticatorKeyAsync(user), issuer = "FHGM", account = user.Email });
     }
     [HttpPost("mfa/enable")]

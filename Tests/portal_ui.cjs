@@ -22,6 +22,16 @@ const assert = require('node:assert/strict');
  assert.equal(await page.locator('#article-preview strong').textContent(),'Bold text');
  assert.equal(await page.locator('#article-preview script').count(),0);
  await page.waitForFunction(() => document.querySelector('#autosave-status').textContent.startsWith('Saved at'));
+ let delayed = false;
+ await page.route('**/api/blog/*', async route => {
+  if (route.request().method() === 'PUT' && !delayed) { delayed = true; await new Promise(resolve => setTimeout(resolve, 4500)); }
+  await route.continue();
+ });
+ await page.locator('#blog-form [name=content]').fill('First edit');
+ await page.waitForFunction(() => document.querySelector('#save-blog').disabled);
+ await page.locator('#blog-form [name=content]').fill('Latest edit made while saving');
+ await page.waitForFunction(() => current && current.content === 'Latest edit made while saving', undefined, {timeout:20000});
+ await page.unroute('**/api/blog/*');
  await page.locator('#save-blog').click();
  await page.waitForFunction(() => document.querySelector('#blog-rows').textContent.includes('Browser article'));
  await page.goto(base + '/admin/gallery');
