@@ -6,3 +6,6 @@
     <div class="panel p-4"><h2>Backend process</h2><dl id="monitor-process" class="row mb-0"></dl><p class="small muted mt-3 mb-0">Memory and uptime describe the backend process/container. Use the server's monitoring tools for VPS-wide metrics and Uptime Kuma for external availability.</p></div>
     <div class="panel p-4"><h2>Administration</h2><p class="muted">Manage developer/church accounts and review recorded content and account changes.</p><div class="d-flex gap-3"><a class="btn primary" asp-action="Users">Team members</a><a class="btn outline" asp-action="Audit">Activity log</a></div></div>
 </section>
+
+
+<button id="storage-probe" type="button" class="btn outline">Test R2 read/write connection</button><p id="storage-probe-result" role="status"></p>

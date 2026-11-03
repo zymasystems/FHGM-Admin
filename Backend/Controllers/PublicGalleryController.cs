@@ -16,7 +16,7 @@ public sealed class PublicGalleryController(AppDbContext db, GalleryStorage stor
         var query = db.GalleryAlbums.AsNoTracking().Where(x => x.IsPublished && x.Images.Any(i => i.IsComplete && i.IsPublished && !i.IsDeleted));
         var albums = await query.OrderByDescending(x => x.CreatedAt).Skip((page - 1) * 20).Take(20)
             .Select(x => new { x.Slug, x.Title, x.Description, coverKey = x.Images.Where(i => i.IsComplete && i.IsPublished && !i.IsDeleted)
-                .OrderByDescending(i => i.CreatedAt).Select(i => i.StorageKey).First(), imageCount = x.Images.Count(i => i.IsComplete && i.IsPublished && !i.IsDeleted) }).ToListAsync();
+                .OrderByDescending(i => i.Id == x.CoverImageId).ThenByDescending(i => i.CreatedAt).Select(i => i.StorageKey).First(), imageCount = x.Images.Count(i => i.IsComplete && i.IsPublished && !i.IsDeleted) }).ToListAsync();
         return Ok(new { total = await query.CountAsync(), page, items = albums.Select(x => new { x.Slug, x.Title, x.Description, coverUrl = storage.PublicUrl(x.coverKey), x.imageCount }) });
     }
 
@@ -33,3 +33,4 @@ public sealed class PublicGalleryController(AppDbContext db, GalleryStorage stor
             items = images.Select(x => new { x.AltText, x.Caption, url = storage.PublicUrl(x.StorageKey) }) });
     }
 }
+

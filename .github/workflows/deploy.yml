@@ -66,6 +66,8 @@ jobs:
 
           docker compose --env-file .env -f deploy/docker-compose.yml config --quiet
           docker compose --env-file .env -f deploy/docker-compose.yml build
+          docker compose --env-file .env -f deploy/docker-compose.yml up -d db
+          docker compose --env-file .env -f deploy/docker-compose.yml run --rm backend --initialize
           docker compose --env-file .env -f deploy/docker-compose.yml up -d
 
           for attempt in {1..30}; do
@@ -78,3 +80,4 @@ jobs:
           echo "Health check failed after deployment."
           exit 1
           REMOTE
+

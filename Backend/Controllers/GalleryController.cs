@@ -15,17 +15,28 @@ namespace FHGM.Backend.Controllers;
 [ApiController, Route("api/gallery"), Authorize(Policy = Permissions.ManageGallery)]
 public sealed class GalleryController(AppDbContext db, GalleryStorage storage, AuditService audit) : ControllerBase
 {
+    [HttpPost("storage/probe"), Authorize(Roles = Roles.SuperAdmin)]
+    public async Task<IActionResult> Probe(CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); timeout.CancelAfter(TimeSpan.FromSeconds(10));
+        try { await storage.ProbeAsync(timeout.Token); return Ok(new { message = "R2 server-side write/read/delete succeeded. Browser uploads additionally require the correct bucket CORS policy." }); }
+        catch (Exception ex) when (ex is AmazonS3Exception or InvalidOperationException or OperationCanceledException or HttpRequestException or InvalidDataException)
+        { return StatusCode(503, new { message = "R2 probe failed. Check bucket name, API endpoint and object read/write/delete permissions. No credentials are shown here." }); }
+    }
+
     [HttpGet("storage")]
     public IActionResult Storage() => Ok(new { configured = storage.IsConfigured, maximumFileSize = 10485760, types = new[] { "image/jpeg", "image/png", "image/webp" } });
 
     [HttpGet("albums")]
-    public async Task<IActionResult> Albums(int page = 1)
+    public async Task<IActionResult> Albums(int page = 1, string search = "")
     {
         if (page < 1 || page > 10000) return BadRequest();
-        return Ok(new { total = await db.GalleryAlbums.CountAsync(), page, items = await db.GalleryAlbums.AsNoTracking()
+        if (search.Length > 160) return BadRequest();
+        var query = db.GalleryAlbums.AsNoTracking().Where(x => search == "" || x.Title.ToLower().Contains(search.ToLower()));
+        return Ok(new { total = await query.CountAsync(), page, items = await query
             .OrderByDescending(x => x.CreatedAt).Skip((page - 1) * 50).Take(50)
-            .Select(x => new { x.Id, x.Title, x.Slug, x.Description, x.IsPublished, x.Version,
-                imageCount = x.Images.Count(i => i.IsComplete && !i.IsDeleted) }).ToListAsync() });
+            .Select(x => new { x.Id, x.Title, x.Slug, x.Description, x.IsPublished, x.Version, x.CoverImageId,
+                imageCount = x.Images.Count(i => i.IsComplete && !i.IsDeleted), unpublishedCount = x.Images.Count(i => i.IsComplete && !i.IsPublished && !i.IsDeleted), pendingCount = x.Images.Count(i => !i.IsComplete && !i.IsDeleted) }).ToListAsync() });
     }
 
     [HttpPost("albums")]
@@ -44,6 +55,9 @@ public sealed class GalleryController(AppDbContext db, GalleryStorage storage, A
         var album = await db.GalleryAlbums.FindAsync(id);
         if (album is null) return NotFound();
         if (album.Version != request.Version) return Conflict(new { message = "Reload the album; it changed since you opened it." });
+        if (request.CoverImageId.HasValue && !await db.GalleryImages.AnyAsync(x => x.Id == request.CoverImageId && x.AlbumId == id && x.IsComplete && x.IsPublished && !x.IsDeleted))
+            return BadRequest(new { message = "Choose a completed, published photo in this album as the cover." });
+        album.CoverImageId = request.CoverImageId;
         album.Title = request.Title.Trim(); album.Slug = request.Slug; album.Description = request.Description.Trim();
         album.IsPublished = request.IsPublished; album.Version++;
         audit.Record(album.IsPublished ? "AlbumPublishedOrEdited" : "AlbumUnpublishedOrEdited", "GalleryAlbum", id.ToString());
@@ -135,3 +149,4 @@ public sealed class GalleryController(AppDbContext db, GalleryStorage storage, A
         return Accepted(new { message = "Image removed from the gallery. Storage cleanup will run shortly." });
     }
 }
+

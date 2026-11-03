@@ -20,6 +20,7 @@ public sealed class AppUser : IdentityUser
 {
     [MaxLength(120)] public string DisplayName { get; set; } = "";
     public bool IsActive { get; set; } = true;
+    public bool MustChangePassword { get; set; }
 }
 
 public enum BlogStatus { Draft, Submitted, ChangesRequested, Rejected, Approved, Published, Archived }
@@ -35,6 +36,8 @@ public sealed class BlogPost
     [MaxLength(500)] public string Tags { get; set; } = "";
     [MaxLength(180)] public string SeoTitle { get; set; } = "";
     [MaxLength(320)] public string SeoDescription { get; set; } = "";
+    [MaxLength(2000)] public string FeaturedImageUrl { get; set; } = "";
+    [MaxLength(20)] public string ContentFormat { get; set; } = "PlainText";
     public string AuthorId { get; set; } = "";
     [System.Text.Json.Serialization.JsonIgnore] public AppUser Author { get; set; } = null!;
     public BlogStatus Status { get; set; }
@@ -57,3 +60,4 @@ public sealed class AuditLog
     [MaxLength(64)] public string? IpAddress { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
+

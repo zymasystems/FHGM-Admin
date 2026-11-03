@@ -26,6 +26,11 @@ services:
       Bootstrap__Email: ${BOOTSTRAP_EMAIL:-}
       Bootstrap__Password: ${BOOTSTRAP_PASSWORD:-}
       DataProtection__KeysPath: /home/app/.aspnet/DataProtection-Keys
+      Email__Host: ${SMTP_HOST:-}
+      Email__Port: ${SMTP_PORT:-587}
+      Email__From: ${SMTP_FROM:-}
+      Email__Username: ${SMTP_USERNAME:-}
+      Email__Password: ${SMTP_PASSWORD:-}
       R2__AccountId: ${R2_ACCOUNT_ID:-}
       R2__Bucket: ${R2_BUCKET:-}
       R2__AccessKeyId: ${R2_ACCESS_KEY_ID:-}
@@ -78,3 +83,4 @@ volumes:
   postgres_data:
   protection_keys:
   uptime_data:
+

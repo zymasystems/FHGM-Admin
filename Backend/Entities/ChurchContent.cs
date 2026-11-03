@@ -4,6 +4,7 @@ namespace FHGM.Backend.Entities;
 
 public sealed class MinistryEvent
 {
+    [MaxLength(2000)] public string FeaturedImageUrl { get; set; } = "";
     public Guid Id { get; set; } = Guid.NewGuid();
     [MaxLength(180)] public string Title { get; set; } = "";
     [MaxLength(200)] public string Slug { get; set; } = "";
@@ -30,3 +31,4 @@ public sealed class PopupAnnouncement
     public int Version { get; set; } = 1;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
+

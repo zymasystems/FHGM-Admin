@@ -28,7 +28,7 @@ public sealed class UsersController(AppDbContext db, UserManager<AppUser> users,
     {
         if (!Roles.All.Contains(request.Role)) return BadRequest(new { message = "Choose a supported role." });
         await using var transaction = await db.Database.BeginTransactionAsync();
-        var user = new AppUser { UserName = request.Email, Email = request.Email, DisplayName = request.DisplayName.Trim(), EmailConfirmed = true };
+        var user = new AppUser { UserName = request.Email, Email = request.Email, DisplayName = request.DisplayName.Trim(), EmailConfirmed = true, MustChangePassword = true };
         var result = await users.CreateAsync(user, request.Password);
         if (!result.Succeeded) return BadRequest(new { message = string.Join(" ", result.Errors.Select(x => x.Description)) });
         result = await users.AddToRoleAsync(user, request.Role);
@@ -59,3 +59,4 @@ public sealed class UsersController(AppDbContext db, UserManager<AppUser> users,
         return NoContent();
     }
 }
+

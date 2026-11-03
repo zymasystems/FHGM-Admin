@@ -87,6 +87,7 @@ public sealed class BlogsController(IBlogRepository blogs, UserManager<AppUser> 
 
     private static void Apply(BlogPost post, BlogRequest request)
     {
+        post.FeaturedImageUrl = request.FeaturedImageUrl; post.ContentFormat = request.ContentFormat;
         post.Title = request.Title.Trim(); post.Slug = request.Slug.Trim();
         post.Excerpt = request.Excerpt.Trim(); post.Content = request.Content.Trim();
         post.Category = request.Category.Trim(); post.Tags = request.Tags.Trim();
@@ -94,3 +95,4 @@ public sealed class BlogsController(IBlogRepository blogs, UserManager<AppUser> 
         post.UpdatedAt = DateTimeOffset.UtcNow;
     }
 }
+
