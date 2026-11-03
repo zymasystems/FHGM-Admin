@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace FHGM.Backend.DTOs;
 
-public sealed record LoginRequest([Required, EmailAddress] string Email, [Required] string Password);
+public sealed record LoginRequest([Required, EmailAddress] string Email, [Required] string Password, [MaxLength(100)] string TwoFactorCode = "", [MaxLength(100)] string RecoveryCode = "");
 public sealed record CreateUserRequest(
     [Required, EmailAddress, MaxLength(256)] string Email,
     [Required, MinLength(12), MaxLength(128)] string Password,
@@ -18,5 +18,7 @@ public sealed record BlogRequest(
     [MaxLength(500)] string Tags = "",
     [MaxLength(180)] string SeoTitle = "",
     [MaxLength(320)] string SeoDescription = "",
-    int Version = 1);
+    int Version = 1, [RegularExpression("PlainText|Markdown")] string ContentFormat = "PlainText",
+    [MaxLength(2000), SafeImageUrl] string FeaturedImageUrl = "");
 public sealed record TransitionRequest([Required] string Action, int Version, [MaxLength(2000)] string Note = "");
+

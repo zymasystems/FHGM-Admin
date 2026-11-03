@@ -11,6 +11,7 @@ public sealed class GalleryAlbum
     public bool IsPublished { get; set; }
     public int Version { get; set; } = 1;
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public Guid? CoverImageId { get; set; }
     public ICollection<GalleryImage> Images { get; set; } = [];
 }
 
@@ -35,3 +36,4 @@ public sealed class GalleryImage
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UploadExpiresAt { get; set; }
 }
+

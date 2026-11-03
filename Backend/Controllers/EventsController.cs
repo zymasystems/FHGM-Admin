@@ -30,6 +30,13 @@ public sealed class EventsController(AppDbContext db, AuditService audit) : Cont
     public async Task<IActionResult> Create(EventRequest request)
     {
         var item = new MinistryEvent(); Apply(item, request); db.Events.Add(item);
+        for (var n = 1; n < request.Occurrences; n++)
+        {
+            var occurrence = new MinistryEvent(); Apply(occurrence, request);
+            occurrence.Slug = request.Slug[..Math.Min(request.Slug.Length, 180)] + "-" + item.Id.ToString("N")[..8] + "-" + (n + 1);
+            occurrence.StartsAt = item.StartsAt.AddDays(7 * n); occurrence.EndsAt = item.EndsAt.AddDays(7 * n);
+            db.Events.Add(occurrence); audit.Record("EventCreated", "MinistryEvent", occurrence.Id.ToString());
+        }
         audit.Record("EventCreated", "MinistryEvent", item.Id.ToString());
         await db.SaveChangesAsync();
         return CreatedAtAction(nameof(Get), new { id = item.Id }, item);
@@ -55,8 +62,10 @@ public sealed class EventsController(AppDbContext db, AuditService audit) : Cont
     }
     private static void Apply(MinistryEvent item, EventRequest request)
     {
+        item.FeaturedImageUrl = request.FeaturedImageUrl;
         item.Title = request.Title.Trim(); item.Slug = request.Slug; item.Description = request.Description.Trim();
         item.Location = request.Location.Trim(); item.StartsAt = request.StartsAt.ToUniversalTime(); item.EndsAt = request.EndsAt.ToUniversalTime();
         item.IsPublished = request.IsPublished; item.UpdatedAt = DateTimeOffset.UtcNow;
     }
 }
+

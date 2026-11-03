@@ -24,6 +24,7 @@ namespace FHGM.Backend.Data.Migrations
 
             modelBuilder.Entity("FHGM.Backend.Entities.AppUser", b =>
                 {
+            b.Property<bool>("MustChangePassword").HasColumnType("boolean");
                     b.Property<string>("Id")
                         .HasColumnType("text");
 
@@ -162,6 +163,8 @@ namespace FHGM.Backend.Data.Migrations
 
             modelBuilder.Entity("FHGM.Backend.Entities.BlogPost", b =>
                 {
+            b.Property<string>("ContentFormat").IsRequired().HasMaxLength(20).HasColumnType("character varying(20)");
+            b.Property<string>("FeaturedImageUrl").IsRequired().HasMaxLength(2000).HasColumnType("character varying(2000)");
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
@@ -249,6 +252,7 @@ namespace FHGM.Backend.Data.Migrations
 
             modelBuilder.Entity("FHGM.Backend.Entities.GalleryAlbum", b =>
                 {
+            b.Property<Guid?>("CoverImageId").HasColumnType("uuid");
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
@@ -366,6 +370,7 @@ namespace FHGM.Backend.Data.Migrations
 
             modelBuilder.Entity("FHGM.Backend.Entities.MinistryEvent", b =>
                 {
+            b.Property<string>("FeaturedImageUrl").IsRequired().HasMaxLength(2000).HasColumnType("character varying(2000)");
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
@@ -681,3 +686,4 @@ namespace FHGM.Backend.Data.Migrations
         }
     }
 }
+

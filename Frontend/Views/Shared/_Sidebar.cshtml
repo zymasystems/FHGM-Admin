@@ -2,6 +2,7 @@
     <a class="brand ministry-brand" asp-controller="Dashboard" asp-action="Index"><img src="~/images/ministry-logo.png" alt="For His Grace Ministries"><span>For His Grace<br>Ministries</span></a>
     <p class="eyebrow">ADMINISTRATION PORTAL</p>
     <nav aria-label="Administration">
+        <a class="nav-item" href="/account/security">Password & security</a>
         <a class="nav-item" asp-controller="Dashboard" asp-action="Index">Overview</a>
         @if (User.IsInRole("SuperAdmin") || User.IsInRole("ChurchAdmin") || User.IsInRole("MediaManager"))
         { <a class="nav-item" asp-controller="Dashboard" asp-action="Gallery">Photo gallery</a> }
@@ -27,3 +28,4 @@
         <button id="logout" class="btn btn-outline-secondary outline">Sign out</button>
     </div>
 </aside>
+

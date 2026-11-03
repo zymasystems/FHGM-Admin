@@ -1,14 +1,14 @@
 (() => {
   'use strict';
   const el = id => document.getElementById(id);
-  let albums = [], selected = null, albumPage = 1, imagePage = 1, configured = false;
+  let albums = [], selected = null, albumPage = 1, imagePage = 1, configured = false, search = "", imageItems = [], selectedIds = new Set(), queue = [], uploading = false;
   const form = el('album-form');
   const initialControls = [...form.elements, el('album-new'), el('album-select')];
   initialControls.forEach(control => { control.disabled = true; });
   function status(text) { el('gallery-upload-status').textContent = text; }
   function clearAlbum() { selected = null; form.reset(); el('album-select').value = ''; el('album-form-title').textContent = 'New album'; el('gallery-upload').disabled = true; el('gallery-images').replaceChildren(); el('gallery-empty').hidden = false; el('gallery-images-title').textContent = 'Album photos'; }
   async function loadAlbums(preferredId = selected?.id) {
-    const data = await api('gallery/albums?page=' + albumPage); albums = data.items;
+    const data = await api('gallery/albums?page=' + albumPage + '&search=' + encodeURIComponent(search)); albums = data.items;
     el('album-select').replaceChildren(new Option('Select an album', ''));
     for (const album of albums) el('album-select').append(new Option(album.title + (album.isPublished ? ' · Published' : ' · Draft'), album.id));
     el('albums-prev').disabled = albumPage <= 1; el('albums-next').disabled = albumPage * 50 >= data.total;
@@ -29,11 +29,16 @@
     el('gallery-images-title').textContent = selected.title;
     el('gallery-images-description').textContent = selected.isPublished ? 'Album published. Only published photos appear on the website.' : 'Album is a draft. Its photos are hidden from the website.';
     const data = await api(`gallery/albums/${selected.id}/images?page=${imagePage}`);
+    imageItems = data.items; selectedIds.clear(); selectionStatus();
+    el('gallery-images-description').textContent += ` ${selected.unpublishedCount || 0} completed photos are still drafts; ${selected.pendingCount || 0} uploads are incomplete.`;
     el('gallery-images').replaceChildren(); el('gallery-empty').hidden = data.total !== 0;
     el('images-page').textContent = `Page ${imagePage} · ${data.total} photos`; el('images-prev').disabled = imagePage <= 1; el('images-next').disabled = imagePage * 24 >= data.total;
     for (const image of data.items) {
       const card = document.createElement('article'); card.className = 'gallery-image-card';
       if (image.isComplete) { const img = document.createElement('img'); img.src = image.url; img.alt = image.altText || image.fileName; img.loading = 'lazy'; card.append(img); }
+      const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.setAttribute('aria-label', 'Select ' + image.fileName);
+      checkbox.addEventListener('change', () => { checkbox.checked ? selectedIds.add(image.id) : selectedIds.delete(image.id); selectionStatus(); }); card.append(checkbox);
+      const state = document.createElement('p'); state.className = 'badge'; state.textContent = !image.isComplete ? 'Upload incomplete' : image.isPublished ? 'Published photo' : 'Draft photo'; card.append(state);
       const content = document.createElement('div'); content.className = 'p-3'; const name = document.createElement('p'); name.className = 'small fw-semibold'; name.textContent = image.fileName; content.append(name);
       if (image.isComplete) {
         const imageForm = document.createElement('form'); const alt = document.createElement('input'); alt.className = 'form-control'; alt.value = image.altText; alt.required = true; alt.maxLength = 300;
@@ -42,8 +47,11 @@
         const check = makeLabel('Publish photo', published); check.className = 'check-label mb-3';
         const save = document.createElement('button'); save.type = 'submit'; save.className = 'btn btn-primary primary'; save.textContent = 'Save photo';
         imageForm.append(makeLabel('Image description (alt text)', alt), makeLabel('Caption', caption), check, save);
-        imageForm.addEventListener('submit', event => { event.preventDefault(); perform(save, async () => { await api('gallery/images/' + image.id, 'PUT', { altText: alt.value, caption: caption.value, isPublished: published.checked, version: image.version }); await loadImages(); notice('Photo saved.'); }); });
+        imageForm.addEventListener('submit', event => { event.preventDefault(); perform(save, async () => { await api('gallery/images/' + image.id, 'PUT', { altText: alt.value, caption: caption.value, isPublished: published.checked, version: image.version }); await loadAlbums(); notice('Photo saved.'); }); });
         content.append(imageForm);
+        if (image.isPublished) content.append(button(selected.coverImageId === image.id ? 'Current album cover' : 'Use as album cover', async () => {
+          await api('gallery/albums/' + selected.id, 'PUT', { ...selected, coverImageId: image.id }); await loadAlbums(); notice('Album cover updated.');
+        }));
       } else {
         const note = document.createElement('p'); note.className = 'small muted'; note.textContent = 'Upload not completed. If the file finished uploading, retry completion. Otherwise remove it and select the image again.'; content.append(note);
         content.append(button('Finish upload', async () => { await api('gallery/images/' + image.id + '/complete', 'POST', {}); await loadImages(); }));
@@ -57,7 +65,7 @@
       request.setRequestHeader('Content-Type', file.type);
       request.upload.addEventListener('progress', e => { if (e.lengthComputable) el('gallery-progress').value = Math.round(e.loaded / e.total * 100); });
       request.addEventListener('load', () => request.status >= 200 && request.status < 300 ? resolve() : reject(new Error('The image could not be uploaded. Check the storage connection and try again.')));
-      request.addEventListener('error', () => reject(new Error('Upload connection failed. Your administrator may need to check gallery storage permissions.')));
+      request.addEventListener('error', () => reject(new Error('The browser could not reach image storage. Check your connection; ask the developer to check the R2 bucket CORS origin, PUT permissions and browser console. Retry this photo after the cause is fixed.')));
       request.addEventListener('timeout', () => reject(new Error('The upload timed out. Try again on a stronger connection.')));
       request.send(file);
     });
@@ -66,29 +74,80 @@
   el('album-select').addEventListener('change', event => perform(el('album-select'), () => selectAlbum(event.target.value)));
   form.addEventListener('submit', event => {
     event.preventDefault(); perform(event.submitter, async () => {
-      const body = { title: form.elements.title.value, slug: form.elements.slug.value, description: form.elements.description.value, isPublished: form.elements.isPublished.checked, version: selected?.version || 1 };
+      const body = { title: form.elements.title.value, slug: form.elements.slug.value, description: form.elements.description.value, isPublished: form.elements.isPublished.checked, version: selected?.version || 1, coverImageId: selected?.coverImageId || null };
       const result = await api(selected ? 'gallery/albums/' + selected.id : 'gallery/albums', selected ? 'PUT' : 'POST', body);
       await loadAlbums(result.id); notice(result.isPublished ? 'Album saved and published.' : 'Album saved as a draft.');
     });
   });
+  function selectionStatus() { el('gallery-selection-status').textContent = `${selectedIds.size} photos selected on this page.`; }
+  el('album-search-form').addEventListener('submit', event => { event.preventDefault(); search = el('album-search').value.trim(); albumPage = 1; perform(event.submitter, () => loadAlbums(null)); });
+  el('select-photos').addEventListener('click', () => {
+    const select = selectedIds.size !== imageItems.length; selectedIds = new Set(select ? imageItems.map(x => x.id) : []);
+    el('gallery-images').querySelectorAll('article > input[type=checkbox]').forEach(x => { x.checked = select; }); selectionStatus();
+  });
+  for (const [id, action] of [['publish-photos', 'publish'], ['unpublish-photos', 'unpublish'], ['remove-photos', 'remove']]) {
+    el(id).addEventListener('click', () => perform(el(id), async () => {
+      const chosen = imageItems.filter(x => selectedIds.has(x.id));
+      if (!chosen.length) throw new Error('Select photos first.');
+      if (action === 'remove' && !confirm(`Remove ${chosen.length} selected photos?`)) return;
+      let done = 0, failures = [];
+      for (const photo of chosen) {
+        try {
+          if (action === 'remove') await api('gallery/images/' + photo.id, 'DELETE', {});
+          else {
+            if (!photo.isComplete) throw new Error('Upload is incomplete.');
+            await api('gallery/images/' + photo.id, 'PUT', { altText: photo.altText, caption: photo.caption, isPublished: action === 'publish', version: photo.version });
+          }
+          done++;
+        } catch (e) { failures.push(photo.fileName + ': ' + e.message); }
+      }
+      await loadAlbums(); notice(`${done} updated. ${failures.join(' ')}`, failures.length > 0);
+    }));
+  }
+  function drawQueue() {
+    el('upload-queue').replaceChildren();
+    for (const item of queue) {
+      const row = document.createElement('p'); row.textContent = `${item.file.name}: ${item.state}`;
+      if (item.state.startsWith('Failed')) row.append(button('Retry photo', () => runQueue([item])));
+      el('upload-queue').append(row);
+    }
+  }
+  async function runQueue(items) {
+    if (uploading) throw new Error('Wait for the current upload to finish.');
+    uploading = true; el('gallery-upload').disabled = true; el('gallery-progress').hidden = false;
+    try {
+      for (const item of items) {
+        try {
+          item.state = 'Uploading'; drawQueue(); el('gallery-progress').value = 0;
+          // A new signed URL is needed after expiry. Remove only this queue item's failed record.
+          if (item.uploadId) { await api('gallery/images/' + item.uploadId, 'DELETE', {}); item.uploadId = null; }
+          const upload = await api('gallery/uploads', 'POST', { albumId: item.albumId, fileName: item.file.name, contentType: item.file.type, size: item.file.size, altText: item.file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ') });
+          item.uploadId = upload.id;
+          await putFile(upload.uploadUrl, item.file);
+          item.state = 'Verifying'; drawQueue();
+          await api('gallery/images/' + upload.id + '/complete', 'POST', {});
+          item.state = 'Uploaded · draft'; item.uploadId = null;
+        } catch (error) { item.state = 'Failed: ' + error.message; }
+        drawQueue();
+      }
+      status('Finished processing. Uploaded photos remain drafts until you publish them. Failed photos can be retried while this page is open.');
+      await loadAlbums();
+    } finally { uploading = false; el('gallery-upload').disabled = !configured || !selected; el('gallery-progress').hidden = true; }
+  }
   el('gallery-upload-form').addEventListener('submit', event => {
     event.preventDefault(); perform(event.submitter, async () => {
       if (!selected || !configured) throw new Error('Save an album and connect image storage before uploading.');
       const files = Array.from(el('gallery-files').files);
-      if (files.length > 20) throw new Error('Choose up to 20 photos at a time.');
+      if (!files.length || files.length > 20) throw new Error('Choose 1–20 photos at a time.');
       for (const file of files) if (!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size < 16 || file.size > 10485760) throw new Error(`${file.name}: choose a JPEG, PNG or WebP image up to 10 MB.`);
-      el('gallery-progress').hidden = false; let completed = 0;
-      try {
-        for (const file of files) {
-          status(`Uploading ${completed + 1} of ${files.length}: ${file.name}`); el('gallery-progress').value = 0;
-          const upload = await api('gallery/uploads', 'POST', { albumId: selected.id, fileName: file.name, contentType: file.type, size: file.size, altText: file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ') });
-          await putFile(upload.uploadUrl, file); await api('gallery/images/' + upload.id + '/complete', 'POST', {}); completed++;
-        }
-        el('gallery-files').value = ''; status(`${completed} photo${completed === 1 ? '' : 's'} uploaded. Add descriptions and publish the photos when ready.`);
-      } catch (error) { status(`${completed} uploaded. ${error.message}`); throw error; }
-      finally { el('gallery-progress').hidden = true; await loadImages(); }
+      if (queue.some(x => x.state.startsWith('Failed')) && !confirm('Replace the retry queue? Incomplete records can still be removed from the album.')) return;
+      queue = files.map(file => ({ file, albumId: selected.id, state: 'Waiting', uploadId: null }));
+      el('gallery-files').value = ''; await runQueue(queue);
     });
   });
+  const drop = el('gallery-upload-form');
+  drop.addEventListener('dragover', event => { event.preventDefault(); });
+  drop.addEventListener('drop', event => { event.preventDefault(); if (!uploading && event.dataTransfer.files.length) { el('gallery-files').files = event.dataTransfer.files; status(`${event.dataTransfer.files.length} photos selected. Choose Upload to this album.`); } });
   el('gallery-refresh').addEventListener('click', () => perform(el('gallery-refresh'), () => loadAlbums()));
   for (const [id, offset] of [['images-prev',-1],['images-next',1]]) el(id).addEventListener('click', () => perform(el(id), async () => { imagePage += offset; await loadImages(); }));
   for (const [id, offset] of [['albums-prev',-1],['albums-next',1]]) el(id).addEventListener('click', () => perform(el(id), async () => { albumPage += offset; await loadAlbums(); }));
@@ -98,3 +157,4 @@
     finally { initialControls.forEach(control => { control.disabled = false; }); }
   })();
 })();
+

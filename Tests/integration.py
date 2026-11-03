@@ -45,6 +45,12 @@ class Client:
         self.token = self.request("/api/auth/csrf")["token"]
         result = self.request("/api/auth/login", "POST", {"email": email, "password": password})
         self.token = self.request("/api/auth/csrf")["token"]
+        if result.get("mustChangePassword"):
+            self.request("/api/blog", expected=403)
+            self.request("/api/security/password", "POST", {"currentPassword": password, "newPassword": password + "-Changed"}, expected=204)
+            self.token = self.request("/api/auth/csrf")["token"]
+            self.request("/api/security/password", "POST", {"currentPassword": password + "-Changed", "newPassword": password}, expected=204)
+            self.token = self.request("/api/auth/csrf")["token"]
         return result
 
 
@@ -153,3 +159,4 @@ editor.request("/api/audit", expected=403)
 admin.request("/api/auth/logout", "POST", {}, expected=204)
 admin.request("/api/users", expected=401)
 print(f"PASS: {checks} HTTP checks plus MVC access, session isolation, content, workflow, ownership and audit assertions.")
+

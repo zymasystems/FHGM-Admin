@@ -28,8 +28,9 @@ $('next').addEventListener('click', async () => { page++; await load(); });
     const post = await get('/' + encodeURIComponent(slug)); $('listing').hidden = true; $('article').hidden = false;
     $('article-title').textContent = post.title; $('article-excerpt').textContent = post.excerpt;
     // Article content is always plain text, never inserted as HTML.
-    $('article-content').textContent = post.content; $('article-meta').textContent = (post.category || 'MINISTRY STORY') + ' · ' + post.author;
+    FhgmContent.render($('article-content'), post.content, post.contentFormat); $('article-meta').textContent = (post.category || 'MINISTRY STORY') + ' · ' + post.author;
     document.title = (post.seoTitle || post.title) + ' · FHGM';
     document.querySelector('meta[name="description"]').content = post.seoDescription || post.excerpt;
   } catch (error) { $('public-message').textContent = error.message; $('articles').replaceChildren(); $('previous').hidden = true; $('next').hidden = true; }
 })();
+

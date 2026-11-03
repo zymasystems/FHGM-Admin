@@ -15,14 +15,14 @@ public sealed class PublicChurchContentController(AppDbContext db, TimeProvider 
         var now = clock.GetUtcNow();
         var query = db.Events.AsNoTracking().Where(x => x.IsPublished && x.EndsAt > now);
         return Ok(new { total = await query.CountAsync(), page, serverTime = now, items = await query.OrderBy(x => x.StartsAt).ThenBy(x => x.Id)
-            .Skip((page - 1) * 12).Take(12).Select(x => new { x.Title, x.Slug, x.Description, x.Location, x.StartsAt, x.EndsAt }).ToListAsync() });
+            .Skip((page - 1) * 12).Take(12).Select(x => new { x.Title, x.Slug, x.FeaturedImageUrl, x.Description, x.Location, x.StartsAt, x.EndsAt }).ToListAsync() });
     }
     [HttpGet("events/{slug}")]
     public async Task<IActionResult> Event(string slug)
     {
         var now = clock.GetUtcNow();
         var item = await db.Events.AsNoTracking().Where(x => x.Slug == slug && x.IsPublished && x.EndsAt > now)
-            .Select(x => new { x.Title, x.Slug, x.Description, x.Location, x.StartsAt, x.EndsAt }).FirstOrDefaultAsync();
+            .Select(x => new { x.Title, x.Slug, x.FeaturedImageUrl, x.Description, x.Location, x.StartsAt, x.EndsAt }).FirstOrDefaultAsync();
         return item is null ? NotFound() : Ok(item);
     }
     [HttpGet("popups/active")]
@@ -35,3 +35,4 @@ public sealed class PublicChurchContentController(AppDbContext db, TimeProvider 
         return Ok(new { serverTime = now, items });
     }
 }
+

@@ -7,7 +7,7 @@ public sealed record EventRequest(
     [Required, MaxLength(200), RegularExpression("^[a-z0-9]+(?:-[a-z0-9]+)*$")] string Slug,
     [Required, MaxLength(5000)] string Description,
     [Required, MaxLength(300)] string Location,
-    DateTimeOffset StartsAt, DateTimeOffset EndsAt, bool IsPublished, [Range(1, int.MaxValue)] int Version = 1) : IValidatableObject
+    DateTimeOffset StartsAt, DateTimeOffset EndsAt, bool IsPublished, [Range(1, int.MaxValue)] int Version = 1, [MaxLength(2000), SafeImageUrl] string FeaturedImageUrl = "", [Range(1, 52)] int Occurrences = 1) : IValidatableObject
 {
     public IEnumerable<ValidationResult> Validate(ValidationContext context)
     {
@@ -36,3 +36,4 @@ public sealed record PopupRequest(
         && (value.StartsWith('/') && !value.StartsWith("//")
             || Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme == "https" && string.IsNullOrEmpty(uri.UserInfo));
 }
+

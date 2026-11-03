@@ -15,3 +15,9 @@
   el('monitor-refresh').addEventListener('click', () => perform(el('monitor-refresh'), refresh));
   refresh().catch(error => notice(error.message, true));
 })();
+
+
+document.getElementById('storage-probe').addEventListener('click', () => perform(document.getElementById('storage-probe'), async () => {
+ const node = document.getElementById('storage-probe-result'); node.textContent = 'Testing storage…';
+ try { const result = await api('gallery/storage/probe', 'POST', {}); node.textContent = result.message; } catch (error) { node.textContent = error.message; }
+}));

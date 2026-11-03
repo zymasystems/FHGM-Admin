@@ -1,5 +1,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
+let editorGeneration = 0;
+let savingBlog = false, autosaveTimer = null, autosaveBlocked = false;
 let csrf = '', me = null, current = null, activeView = document.body.dataset.view || 'overview';
 const pages = { blogs: 1, users: 1, audit: 1 };
 const isEditor = () => me.roles.some(r => ['SuperAdmin', 'ChurchAdmin', 'BlogEditor'].includes(r));
@@ -14,6 +16,7 @@ async function api(path, method = 'GET', body) {
   const response = await fetch('/api/' + path, { method, headers, credentials: 'same-origin', body: body === undefined ? undefined : JSON.stringify(body) });
   const data = response.status === 204 ? null : await response.json().catch(() => null);
   if (!response.ok) {
+    if (data?.passwordChangeRequired) location.assign('/account/security');
     if (response.status === 401 && me) { me = null; $('editor')?.close(); showLogin(); }
     throw new Error(data?.message || (data?.errors ? Object.values(data.errors).flat().join(' ') : data?.title) || ({401:'Please sign in again.',403:'Your role does not allow this action.',429:'Too many attempts. Wait a minute and try again.'}[response.status]) || 'The request failed. Please try again.');
   }
@@ -21,6 +24,7 @@ async function api(path, method = 'GET', body) {
 }
 function showLogin() { location.assign('/account/login'); }
 async function showWorkspace() {
+  if (me.mustChangePassword) { location.assign('/account/security'); return; }
   if ($('identity')) $('identity').textContent = me.displayName + '\n' + me.roles.map(label).join(', ');
   document.querySelectorAll('.nav-item').forEach(link => link.classList.toggle('selected', link.pathname === location.pathname));
   await token();
@@ -36,7 +40,8 @@ async function loadView() {
     for (const post of data.items) {
       const tr = document.createElement('tr'); cell(tr, post.title);
       const badge = document.createElement('span'); badge.className = 'badge ' + post.status; badge.textContent = label(post.status); cell(tr, '').append(badge);
-      cell(tr, post.author); cell(tr, date(post.updatedAt)); cell(tr, '').append(button('Open →', () => openEditor(post.id))); $('blog-rows').append(tr);
+      cell(tr, post.author); cell(tr, date(post.updatedAt)); const actions = cell(tr, ''); actions.append(button('Open →', () => openEditor(post.id)));
+      if (post.status === 'Published') { const view = document.createElement('a'); view.href = 'https://hisgraceministries.co.za/blog-post.html?slug=' + encodeURIComponent(post.slug); view.target = '_blank'; view.rel = 'noopener'; view.textContent = ' View on website'; actions.append(view); } $('blog-rows').append(tr);
     }
     pagination('blog', data, 25);
   } else if (activeView === 'users') {
@@ -53,11 +58,13 @@ async function loadView() {
     pagination('audit', data, 50);
   }
 }
-const fields = ['title','slug','excerpt','content','category','tags','seoTitle','seoDescription'];
+const fields = ['title','slug','excerpt','content','category','tags','seoTitle','seoDescription','contentFormat','featuredImageUrl'];
 async function openEditor(id) {
+  editorGeneration++;
+  clearTimeout(autosaveTimer); autosaveBlocked = false; $('article-preview').hidden = true;
   current = id ? await api('blog/' + id) : null;
   $('blog-form').reset(); $('editor-error').textContent = '';
-  for (const key of fields) $('blog-form').elements[key].value = current?.[key] || '';
+  for (const key of fields) $('blog-form').elements[key].value = current?.[key] || (key === 'contentFormat' ? 'PlainText' : '');
   $('editor-heading').textContent = current ? 'Edit article' : 'New article';
   $('editor-status').textContent = current ? label(current.status) + ' · Version ' + current.version : 'Draft · Your changes will be saved when you select Save draft.';
   $('review-note').hidden = !current?.reviewNote; $('review-note').textContent = current?.reviewNote || '';
@@ -69,8 +76,10 @@ async function openEditor(id) {
     for (const [action, text] of actions[current.status] || []) {
       if (!isEditor() && action !== 'submit') continue;
       $('workflow').append(button(text, async () => {
+        if (savingBlog) { $('editor-error').textContent = 'Wait for the draft to finish saving.'; return; }
+        clearTimeout(autosaveTimer);
         const data = new FormData($('blog-form'));
-        if (editable && fields.some(key => (data.get(key) || '') !== (current[key] || ''))) { $('editor-error').textContent = 'Save your changes before continuing the workflow.'; return; }
+        if (editable && fields.some(key => (data.get(key) || '') !== (current[key] || (key === 'contentFormat' ? 'PlainText' : '')))) { $('editor-error').textContent = 'Save your changes before continuing the workflow.'; return; }
         let note = '';
         if (['request-changes','reject'].includes(action)) { note = prompt('Add a review note for the writer:'); if (note === null) return; }
         if (action === 'publish' && !confirm('Publish this article on the public website?')) return;
@@ -82,16 +91,47 @@ async function openEditor(id) {
 }
 $('login-form')?.addEventListener('submit', async event => {
   event.preventDefault(); const submit = event.submitter; submit.disabled = true; $('login-error').textContent = '';
-  try { await token(); me = await api('auth/login', 'POST', Object.fromEntries(new FormData(event.target))); location.assign(event.target.dataset.returnUrl || '/admin/'); } catch (error) { $('login-error').textContent = error.message; } finally { submit.disabled = false; }
+  try { await token(); me = await api('auth/login', 'POST', Object.fromEntries(new FormData(event.target))); location.assign(me.mustChangePassword ? '/account/security' : event.target.dataset.returnUrl || '/admin/'); } catch (error) { $('login-error').textContent = error.message; } finally { submit.disabled = false; }
 });
 $('logout')?.addEventListener('click', () => perform($('logout'), async () => { await api('auth/logout','POST',{}); me = null; showLogin(); }));
 $('new-blog')?.addEventListener('click', () => perform($('new-blog'), () => openEditor()));
 $('close-editor')?.addEventListener('click', () => { if (confirm('Close the editor? Unsaved changes will be lost.')) $('editor').close(); });
 $('editor')?.addEventListener('cancel', event => { if (!confirm('Close the editor? Unsaved changes will be lost.')) event.preventDefault(); });
-$('blog-form')?.addEventListener('submit', async event => {
-  event.preventDefault(); const submit = event.submitter; submit.disabled = true; $('editor-error').textContent = '';
-  try { const body = Object.fromEntries(new FormData(event.target)); body.version = current?.version || 1; const post = await api(current ? 'blog/' + current.id : 'blog', current ? 'PUT' : 'POST', body); await openEditor(post.id); await loadView(); } catch (error) { $('editor-error').textContent = error.message; } finally { submit.disabled = false; }
+async function saveBlog(automatic = false) {
+  const form = $('blog-form');
+  if (savingBlog || form.elements.title.disabled || !form.checkValidity() || automatic && autosaveBlocked) return;
+  const generation = editorGeneration;
+  savingBlog = true; $('save-blog').disabled = true; $('editor-error').textContent = '';
+  try {
+    const body = Object.fromEntries(new FormData(form)); body.version = current?.version || 1;
+    const saved = await api(current ? 'blog/' + current.id : 'blog', current ? 'PUT' : 'POST', body);
+    if (generation !== editorGeneration) return;
+    current = saved; $('autosave-status').textContent = `Saved at ${new Date().toLocaleTimeString()} · Version ${saved.version}`;
+    if (!automatic) { await openEditor(saved.id); await loadView(); }
+  } catch (error) { autosaveBlocked = true; $('editor-error').textContent = error.message + ' Autosave paused; reopen the article to resolve changes.'; }
+  finally { savingBlog = false; $('save-blog').disabled = false; }
+}
+$('blog-form')?.addEventListener('submit', async event => { event.preventDefault(); clearTimeout(autosaveTimer); await saveBlog(); });
+$('blog-form')?.addEventListener('input', () => {
+  clearTimeout(autosaveTimer);
+  if (!$('blog-form').elements.title.disabled) autosaveTimer = setTimeout(() => { if ($('editor').open) saveBlog(true); }, 3000);
+});
+$('format-toolbar')?.addEventListener('click', event => {
+  const format = event.target.dataset.format; if (!format) return;
+  const form = $('blog-form'), input = form.elements.content; if (input.disabled) return;
+  const selected = input.value.slice(input.selectionStart, input.selectionEnd) || 'Text';
+  let value = {heading: '## ' + selected, bold: '**' + selected + '**', italic: '*' + selected + '*', list: '- ' + selected}[format];
+  if (format === 'link') { const url = prompt('HTTPS link'); if (!url) return; try { if (new URL(url).protocol !== 'https:') return; } catch { return; } value = '[' + selected + '](' + url + ')'; }
+  form.elements.contentFormat.value = 'Markdown'; input.setRangeText(value, input.selectionStart, input.selectionEnd, 'end'); input.dispatchEvent(new Event('input', {bubbles:true})); input.focus();
+});
+$('preview-blog')?.addEventListener('click', () => {
+  const root = $('article-preview'), form = $('blog-form'); root.hidden = false; root.replaceChildren();
+  const heading = document.createElement('h2'); heading.textContent = form.elements.title.value;
+  const excerpt = document.createElement('p'); excerpt.textContent = form.elements.excerpt.value;
+  const body = document.createElement('div'); body.className = 'article-body'; FhgmContent.render(body, form.elements.content.value, form.elements.contentFormat.value);
+  root.append(heading, excerpt, body);
 });
 $('user-form')?.addEventListener('submit', async event => { event.preventDefault(); await perform(event.submitter, async () => { await api('users','POST',Object.fromEntries(new FormData(event.target))); event.target.reset(); pages.users = 1; await loadView(); notice('Team account created.'); }); });
 for (const [prefix, view] of [['blog','blogs'],['user','users'],['audit','audit']]) for (const [direction, offset] of [['prev',-1],['next',1]]) $(prefix + '-' + direction)?.addEventListener('click', () => perform($(prefix + '-' + direction), async () => { pages[view] += offset; await loadView(); }));
 (async () => { if (!$('workspace')) return; try { me = await api('auth/me'); await showWorkspace(); } catch (error) { if (me) notice(error.message, true); else showLogin(); } })();
+

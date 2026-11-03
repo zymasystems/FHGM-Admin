@@ -22,18 +22,27 @@ public sealed class AuthController(SignInManager<AppUser> signIn, UserManager<Ap
     {
         var user = await users.FindByEmailAsync(request.Email);
         if (user is null || !user.IsActive) return Unauthorized(new { message = "Sign-in failed. Check your credentials or contact your administrator." });
-        var result = await signIn.PasswordSignInAsync(user, request.Password, false, lockoutOnFailure: true);
+        var result = await signIn.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
         if (!result.Succeeded) return Unauthorized(new { message = "Sign-in failed. Check your credentials or contact your administrator." });
+        if (await users.GetTwoFactorEnabledAsync(user))
+        {
+            var valid = !string.IsNullOrWhiteSpace(request.RecoveryCode)
+                ? (await users.RedeemTwoFactorRecoveryCodeAsync(user, request.RecoveryCode.Trim())).Succeeded
+                : await users.VerifyTwoFactorTokenAsync(user, TokenOptions.DefaultAuthenticatorProvider, request.TwoFactorCode.Replace(" ", ""));
+            if (!valid) { await users.AccessFailedAsync(user); return Unauthorized(new { message = "Sign-in failed. Check your credentials and authenticator or recovery code." }); }
+        }
+        await users.ResetAccessFailedCountAsync(user);
+        await signIn.SignInAsync(user, false);
         audit.Record("Login", "User", user.Id, user.Id);
         await db.SaveChangesAsync();
-        return Ok(new { user.Id, user.Email, user.DisplayName, roles = await users.GetRolesAsync(user) });
+        return Ok(new { user.Id, user.Email, user.DisplayName, user.MustChangePassword, roles = await users.GetRolesAsync(user) });
     }
 
     [HttpGet("me"), Authorize]
     public async Task<IActionResult> Me()
     {
         var user = (await users.GetUserAsync(User))!;
-        return Ok(new { user.Id, user.Email, user.DisplayName, roles = await users.GetRolesAsync(user) });
+        return Ok(new { user.Id, user.Email, user.DisplayName, user.MustChangePassword, roles = await users.GetRolesAsync(user) });
     }
 
     [HttpPost("logout"), Authorize]
@@ -45,3 +54,4 @@ public sealed class AuthController(SignInManager<AppUser> signIn, UserManager<Ap
         return NoContent();
     }
 }
+

@@ -1,0 +1,24 @@
+@{ ViewData["Title"] = "Password & security"; }
+<main class="container py-5" id="security-page">
+  <a href="/admin/">← Back to portal</a><h1>Password & security</h1>
+  <p id="security-status" role="status" aria-live="polite"></p><p id="notice" role="alert"></p>
+  <form id="password-change" class="panel p-4"><h2>Change password</h2>
+    <label>Current password<input name="currentPassword" type="password" autocomplete="current-password" required class="form-control"></label>
+    <label>New password<input name="newPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" required class="form-control"></label>
+    <p>Use at least 12 characters, including upper/lowercase letters, a number and a symbol.</p><button class="btn primary">Change password</button>
+  </form>
+  <form id="mfa-form" class="panel p-4"><h2>Authenticator protection</h2>
+    <p>Add an authenticator app. Save your recovery codes somewhere private before signing out.</p>
+    <label>Current password<input name="password" type="password" autocomplete="current-password" required class="form-control"></label>
+    <button type="button" id="mfa-setup" class="btn outline">Set up authenticator</button>
+    <p id="mfa-key" class="text-break" role="status"></p>
+    <label>Six-digit authenticator code<input name="code" autocomplete="one-time-code" inputmode="numeric" class="form-control"></label>
+    <button class="btn primary" id="mfa-enable">Enable authenticator</button>
+    <button type="button" class="btn outline" id="mfa-disable">Disable authenticator</button>
+    <pre id="mfa-recovery" class="text-wrap" aria-live="polite"></pre>
+  </form>
+</main>
+@section Scripts {
+<script src="~/admin/app.js" asp-append-version="true" defer></script>
+<script src="~/admin/security.js" asp-append-version="true" defer></script>
+}

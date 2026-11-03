@@ -1,0 +1,7 @@
+[Unit]
+Description=Back up FHGM database and data protection keys
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/fhgm-ops.env
+ExecStart=/bin/bash /opt/fhgm/deploy/ops/backup.sh
+UMask=0077

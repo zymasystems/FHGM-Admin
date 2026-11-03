@@ -62,6 +62,19 @@ public sealed class GalleryStorage(IOptions<R2Options> options, IHostEnvironment
         }, cancellationToken);
     }
 
+    // Explicit developer-only test, never part of public readiness or every page load.
+    public async Task ProbeAsync(CancellationToken cancellationToken)
+    {
+        var key = "healthchecks/" + Guid.NewGuid().ToString("N") + ".txt";
+        try
+        {
+            await Client.PutObjectAsync(new PutObjectRequest { BucketName = settings.Bucket, Key = key, ContentBody = "FHGM storage probe", ContentType = "text/plain" }, cancellationToken);
+            var head = await Client.GetObjectMetadataAsync(settings.Bucket, key, cancellationToken);
+            if (head.Headers.ContentLength == 0) throw new InvalidDataException("Storage probe returned an empty object.");
+        }
+        finally { await Client.DeleteObjectAsync(settings.Bucket, key, CancellationToken.None); }
+    }
+
     public async Task DeleteAsync(GalleryImage image, CancellationToken cancellationToken)
     {
         await Client.DeleteObjectAsync(settings.Bucket, image.StorageKey, cancellationToken);
@@ -71,3 +84,4 @@ public sealed class GalleryStorage(IOptions<R2Options> options, IHostEnvironment
         Client.DeleteObjectAsync(settings.Bucket, image.StagingKey, cancellationToken);
     public void Dispose() => client?.Dispose();
 }
+

@@ -1,0 +1,6 @@
+[Unit]
+Description=Check FHGM availability and backup freshness
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/fhgm-ops.env
+ExecStart=/bin/bash /opt/fhgm/deploy/ops/check-health.sh

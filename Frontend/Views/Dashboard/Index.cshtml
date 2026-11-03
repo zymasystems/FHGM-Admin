@@ -17,6 +17,7 @@
             default:
                 <section>
                     <div class="page-heading"><div><p class="eyebrow">SERVING HIS PURPOSE</p><h1>Welcome, @User.Identity?.Name</h1><p class="muted">Prepare and share the stories of For His Grace Ministries.</p></div></div>
+                    <div id="dashboard-summary" class="summary" role="region" aria-label="Content needing attention">Loading your content summary…</div>
                     <div class="summary">
                         <div><p class="eyebrow">YOUR MINISTRY WORKSPACE</p><h2>Share your church family</h2><p class="muted">Create albums, upload photos and choose what appears in the website gallery.</p>
                         @if (User.IsInRole("SuperAdmin") || User.IsInRole("ChurchAdmin") || User.IsInRole("MediaManager"))
@@ -38,8 +39,11 @@
 </div>
 @if (Model.ActiveView == "blogs") { <partial name="_Editor" /> }
 @section Scripts {
+    <script src="~/shared/content-renderer.js" asp-append-version="true" defer></script>
     <script src="~/admin/app.js" asp-append-version="true" defer></script>
+    @if (Model.ActiveView == "overview") { <script src="~/admin/dashboard.js" asp-append-version="true" defer></script> }
     @if (Model.ActiveView == "gallery") { <script src="~/admin/gallery.js" asp-append-version="true" defer></script> }
     @if (Model.ActiveView == "events" || Model.ActiveView == "popups") { <script src="~/admin/church-content.js" asp-append-version="true" defer></script> }
     @if (Model.ActiveView == "monitoring") { <script src="~/admin/monitoring.js" asp-append-version="true" defer></script> }
 }
+

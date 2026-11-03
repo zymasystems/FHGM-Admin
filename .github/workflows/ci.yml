@@ -45,6 +45,10 @@ jobs:
       - run: python -m pip install -r Tests/requirements.txt
       - run: dotnet build FHGM-Admin.sln -c Release --nologo
       - run: node --check Frontend/wwwroot/admin/app.js && node --check Frontend/wwwroot/public/app.js && node --check Frontend/wwwroot/admin/gallery.js && node --check Frontend/wwwroot/public/gallery-widget.js && node --check Frontend/wwwroot/admin/church-content.js && node --check Frontend/wwwroot/admin/monitoring.js && node --check Frontend/wwwroot/public/church-content.js
+      - name: Check all JavaScript and operational scripts
+        run: |
+          find Frontend/wwwroot -name '*.js' -not -path '*/lib/*' -exec node --check {} \;
+          bash -n deploy/ops/backup.sh deploy/ops/test-restore.sh deploy/ops/check-health.sh
       - name: Prepare historical activity before the reference migration
         env:
           PGPASSWORD: ci-only-database-password
@@ -77,10 +81,11 @@ jobs:
             if curl -fsS http://127.0.0.1:5080/health/ready; then break; fi
             sleep 1
           done
-          if ! python3 Tests/church_content_integration.py; then cat /tmp/fhgm-backend.log /tmp/fhgm-frontend.log; exit 1; fi
+          if ! python3 Tests/portal_improvements.py; then cat /tmp/fhgm-backend.log /tmp/fhgm-frontend.log; exit 1; fi
       - name: Validate Compose and build both container images
         env:
           POSTGRES_PASSWORD: ci-only-build-password
         run: |
           docker compose -f deploy/docker-compose.yml config --quiet
           docker compose -f deploy/docker-compose.yml build
+

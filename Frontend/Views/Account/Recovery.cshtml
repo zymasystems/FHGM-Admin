@@ -1,0 +1,11 @@
+@{ ViewData["Title"] = "Recover account"; }
+<main class="container py-5"><a href="/account/login">← Sign in</a><h1>Recover your account</h1><p id="notice" role="status" aria-live="polite"></p>
+<form id="recovery-form" class="panel p-4">
+<label>Email address<input type="email" name="email" autocomplete="username" class="form-control" required></label>
+<div id="reset-fields" hidden><label>New password<input type="password" name="newPassword" minlength="12" maxlength="128" autocomplete="new-password" class="form-control"></label><p>Use 12+ characters with uppercase, lowercase, a number and a symbol.</p></div>
+<button id="recovery-submit" class="btn primary">Send reset link</button>
+</form></main>
+@section Scripts {
+<script src="~/admin/app.js" asp-append-version="true" defer></script>
+<script src="~/admin/security.js" asp-append-version="true" defer></script>
+}
