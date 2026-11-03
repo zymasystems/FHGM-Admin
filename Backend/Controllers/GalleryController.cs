@@ -56,7 +56,12 @@ public sealed class GalleryController(AppDbContext db, GalleryStorage storage, A
         if (album is null) return NotFound();
         if (album.Version != request.Version) return Conflict(new { message = "Reload the album; it changed since you opened it." });
         if (request.CoverImageId.HasValue && !await db.GalleryImages.AnyAsync(x => x.Id == request.CoverImageId && x.AlbumId == id && x.IsComplete && x.IsPublished && !x.IsDeleted))
-            return BadRequest(new { message = "Choose a completed, published photo in this album as the cover." });
+        {
+            if (request.CoverImageId != album.CoverImageId)
+                return BadRequest(new { message = "Choose a completed, published photo in this album as the cover." });
+            // A previous cover may have been unpublished or removed since album selection.
+            request = request with { CoverImageId = null };
+        }
         album.CoverImageId = request.CoverImageId;
         album.Title = request.Title.Trim(); album.Slug = request.Slug; album.Description = request.Description.Trim();
         album.IsPublished = request.IsPublished; album.Version++;

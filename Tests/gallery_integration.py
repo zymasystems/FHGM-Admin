@@ -44,7 +44,10 @@ media.request(image_path + "/complete", "POST", {})
 assert not any(a["slug"] == album["slug"] for a in public.request("/api/public/gallery/albums")["items"])
 album = media.request(album_path, "PUT", {**album_body, "isPublished": True, "version": album["version"]})
 assert public.request(public_path)["items"] == []
+album = media.request(album_path, "PUT", {**album_body, "isPublished": True, "version": album["version"], "coverImageId": image["id"]})
+assert next(a for a in media.request('/api/gallery/albums')['items'] if a['id'] == album['id'])['coverImageId'] is None
 image = media.request(image_path, "PUT", {"altText": "Sunday worship", "caption": "Our church family", "isPublished": True, "version": 2})
+album = media.request(album_path, "PUT", {**album_body, "isPublished": True, "version": album["version"], "coverImageId": image["id"]})
 published = public.request(public_path)
 assert len(published["items"]) == 1 and published["items"][0]["altText"] == "Sunday worship"
 public_url = published["items"][0]["url"]
