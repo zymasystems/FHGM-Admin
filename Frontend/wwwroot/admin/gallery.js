@@ -27,6 +27,7 @@
   async function loadImages() {
     if (!selected) return;
     el('gallery-images-title').textContent = selected.title;
+    el('gallery-public-link').hidden = !selected.isPublished; el('gallery-public-link').href = 'https://hisgraceministries.co.za/gallery.html?album=' + encodeURIComponent(selected.slug);
     el('gallery-images-description').textContent = selected.isPublished ? 'Album published. Only published photos appear on the website.' : 'Album is a draft. Its photos are hidden from the website.';
     const data = await api(`gallery/albums/${selected.id}/images?page=${imagePage}`);
     imageItems = data.items; selectedIds.clear(); selectionStatus();
@@ -119,9 +120,11 @@
       for (const item of items) {
         try {
           item.state = 'Uploading'; drawQueue(); el('gallery-progress').value = 0;
-          // A new signed URL is needed after expiry. Remove only this queue item's failed record.
-          if (item.uploadId) { await api('gallery/images/' + item.uploadId, 'DELETE', {}); item.uploadId = null; }
-          const upload = await api('gallery/uploads', 'POST', { albumId: item.albumId, fileName: item.file.name, contentType: item.file.type, size: item.file.size, altText: item.file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ') });
+          // Reuse the record safely; a completed image is never removed by retry.
+          const upload = item.uploadId
+            ? await api('gallery/images/' + item.uploadId + '/retry', 'POST', {})
+            : await api('gallery/uploads', 'POST', { albumId: item.albumId, fileName: item.file.name, contentType: item.file.type, size: item.file.size, altText: item.file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ') });
+          if (upload.isComplete) { item.state = 'Uploaded · draft'; item.uploadId = null; drawQueue(); continue; }
           item.uploadId = upload.id;
           await putFile(upload.uploadUrl, item.file, item);
           item.state = 'Verifying'; drawQueue();

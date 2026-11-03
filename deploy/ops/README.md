@@ -32,7 +32,7 @@ Developer Monitoring has an explicit Test R2 read/write connection button. It wr
 
 ## Publishing behavior
 
-- Gallery queues retain selected File objects only while the page is open. Retry creates a fresh signed URL after removing that queue item's incomplete record. Each photo reports progress and failure separately.
+- Gallery queues retain selected File objects only while the page is open. Retry renews the signed URL and staging key on the incomplete record. A completed image is never deleted by retry. Keep the documented one-day lifecycle rule for `staging/` so abandoned retry objects expire. Each photo reports progress and failure separately.
 - Bulk actions affect selected photos on the current page; partial failures are reported individually. They use existing server role/version checks. Incomplete images cannot be published.
 - A cover must be a completed, published image in the same album. Unpublishing/removing it automatically makes the public feed fall back to another published image.
 - Valid editable articles autosave after three seconds of inactivity. A conflict pauses autosave. Reopen to review the current server version; do not overwrite another writer's work blindly. Markdown supports headings, bold, italics, lists and HTTPS links through a DOM-only renderer; raw HTML never executes. Plain-text articles retain their format. Preview uses the same renderer as the public website, within the portal's own theme.

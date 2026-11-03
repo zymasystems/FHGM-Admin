@@ -38,6 +38,7 @@ def put(url, data):
 put(upload["uploadUrl"], valid)
 result = media.request(image_path + "/complete", "POST", {})
 assert result["version"] == 2
+assert media.request(image_path + '/retry', 'POST', {})['isComplete'] is True
 # A completed image is idempotent and stays hidden until separately published.
 media.request(image_path + "/complete", "POST", {})
 assert not any(a["slug"] == album["slug"] for a in public.request("/api/public/gallery/albums")["items"])
@@ -69,3 +70,4 @@ actions = admin.request("/api/audit")["items"]
 assert any(a["action"] == "ImageUploadCompleted" for a in actions)
 assert any(a["action"] == "ImageRemoved" for a in actions)
 print(f"PASS: {suite.checks} HTTP checks including gallery roles, signed PUTs, file verification, immutable final images, publication, removal and audit.")
+

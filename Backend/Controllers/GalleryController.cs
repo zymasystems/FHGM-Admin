@@ -104,6 +104,23 @@ public sealed class GalleryController(AppDbContext db, GalleryStorage storage, A
         return StatusCode(201, new { image.Id, uploadUrl, image.UploadExpiresAt, image.ContentType });
     }
 
+    [HttpPost("images/{id:guid}/retry")]
+    public async Task<IActionResult> Retry(Guid id)
+    {
+        var image = await db.GalleryImages.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
+        if (image is null) return NotFound();
+        if (image.UploadedBy != User.FindFirstValue(ClaimTypes.NameIdentifier) && !User.IsInRole(Roles.SuperAdmin) && !User.IsInRole(Roles.ChurchAdmin)) return Forbid();
+        // A completion response may have been lost. Never delete a verified image just to retry.
+        if (image.IsComplete) return Ok(new { image.Id, isComplete = true });
+        if (!storage.IsConfigured) return StatusCode(503, new { message = "Gallery storage is not configured." });
+        image.StagingKey = "staging/retries/" + image.Id.ToString("N") + "/" + Guid.NewGuid().ToString("N");
+        image.UploadExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5); image.Version++;
+        var uploadUrl = await storage.UploadUrlAsync(image);
+        audit.Record("ImageUploadRetried", "GalleryImage", image.Id.ToString());
+        await db.SaveChangesAsync();
+        return Ok(new { image.Id, uploadUrl, isComplete = false });
+    }
+
     [HttpPost("images/{id:guid}/complete")]
     public async Task<IActionResult> Complete(Guid id, CancellationToken cancellationToken)
     {

@@ -14,7 +14,7 @@
     }); });
     const proof = () => Object.fromEntries(new FormData($('mfa-form')));
     $('mfa-setup').addEventListener('click', () => perform($('mfa-setup'), async () => {
-      const data = await api('security/mfa/setup', 'POST', proof());
+      const data = await api('security/mfa/setup', 'POST', proof()); await token();
       $('mfa-key').textContent = `In your authenticator app choose “Enter setup key”, select time-based, account ${data.account}, issuer ${data.issuer}, and key: ${data.key}`;
     }));
     $('mfa-form').addEventListener('submit', e => { e.preventDefault(); perform(e.submitter, async () => {
