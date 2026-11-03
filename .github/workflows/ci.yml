@@ -48,7 +48,7 @@ jobs:
       - name: Check all JavaScript and operational scripts
         run: |
           find Frontend/wwwroot -name '*.js' -not -path '*/lib/*' -exec node --check {} \;
-          bash -n deploy/ops/backup.sh deploy/ops/test-restore.sh deploy/ops/check-health.sh
+          for script in deploy/ops/*.sh; do bash -n "$script"; done
       - name: Install browser checks
         run: |
           npm install --no-save --package-lock=false playwright@1.56.1
@@ -93,3 +93,24 @@ jobs:
           docker compose -f deploy/docker-compose.yml config --quiet
           docker compose -f deploy/docker-compose.yml build
 
+      - name: Verify backup and isolated restore against disposable containers
+        env:
+          POSTGRES_PASSWORD: ci-only-build-password
+          BOOTSTRAP_EMAIL: container-admin@example.org
+          BOOTSTRAP_PASSWORD: Container-Only-739!
+        shell: bash
+        run: |
+          export FHGM_ENV_FILE=$(mktemp)
+          export FHGM_BACKUP_DIR=$(mktemp -d)
+          compose=(docker compose --env-file "$FHGM_ENV_FILE" -f deploy/docker-compose.yml)
+          trap '"${compose[@]}" down -v; rm -rf -- "$FHGM_ENV_FILE" "$FHGM_BACKUP_DIR"' EXIT
+          "${compose[@]}" up -d db
+          "${compose[@]}" run --rm backend --initialize
+          "${compose[@]}" up -d
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:5081/health/ready; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:5081/api/auth/csrf > /dev/null
+          bash deploy/ops/backup.sh
+          bash deploy/ops/test-latest-restore.sh

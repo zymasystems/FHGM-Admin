@@ -6,7 +6,7 @@
   const initialControls = [...form.elements, el('album-new'), el('album-select')];
   initialControls.forEach(control => { control.disabled = true; });
   function status(text) { el('gallery-upload-status').textContent = text; }
-  function clearAlbum() { selected = null; form.reset(); el('album-select').value = ''; el('album-form-title').textContent = 'New album'; el('gallery-upload').disabled = true; el('gallery-images').replaceChildren(); el('gallery-empty').hidden = false; el('gallery-images-title').textContent = 'Album photos'; }
+  function clearAlbum() { selected = null; selectedIds.clear(); selectionStatus(); el('gallery-public-link').hidden = true; form.reset(); el('album-select').value = ''; el('album-form-title').textContent = 'New album'; el('gallery-upload').disabled = true; el('gallery-images').replaceChildren(); el('gallery-empty').hidden = false; el('gallery-images-title').textContent = 'Album photos'; }
   async function loadAlbums(preferredId = selected?.id) {
     const data = await api('gallery/albums?page=' + albumPage + '&search=' + encodeURIComponent(search)); albums = data.items;
     el('album-select').replaceChildren(new Option('Select an album', ''));
