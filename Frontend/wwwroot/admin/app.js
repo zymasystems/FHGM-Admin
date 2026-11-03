@@ -1,6 +1,6 @@
 'use strict';
 const $ = id => document.getElementById(id);
-let editorGeneration = 0;
+let editorGeneration = 0, blogRevision = 0;
 let savingBlog = false, autosaveTimer = null, autosaveBlocked = false;
 let csrf = '', me = null, current = null, activeView = document.body.dataset.view || 'overview';
 const pages = { blogs: 1, users: 1, audit: 1 };
@@ -60,7 +60,7 @@ async function loadView() {
 }
 const fields = ['title','slug','excerpt','content','category','tags','seoTitle','seoDescription','contentFormat','featuredImageUrl'];
 async function openEditor(id) {
-  editorGeneration++;
+  editorGeneration++; blogRevision = 0;
   clearTimeout(autosaveTimer); autosaveBlocked = false; $('article-preview').hidden = true;
   current = id ? await api('blog/' + id) : null;
   $('blog-form').reset(); $('editor-error').textContent = '';
@@ -100,19 +100,25 @@ $('editor')?.addEventListener('cancel', event => { if (!confirm('Close the edito
 async function saveBlog(automatic = false) {
   const form = $('blog-form');
   if (savingBlog || form.elements.title.disabled || !form.checkValidity() || automatic && autosaveBlocked) return;
-  const generation = editorGeneration;
+  const generation = editorGeneration, revision = blogRevision;
   savingBlog = true; $('save-blog').disabled = true; $('editor-error').textContent = '';
   try {
     const body = Object.fromEntries(new FormData(form)); body.version = current?.version || 1;
     const saved = await api(current ? 'blog/' + current.id : 'blog', current ? 'PUT' : 'POST', body);
     if (generation !== editorGeneration) return;
     current = saved; $('autosave-status').textContent = `Saved at ${new Date().toLocaleTimeString()} · Version ${saved.version}`;
-    if (!automatic) { await openEditor(saved.id); await loadView(); }
+    if (!automatic) { if (revision === blogRevision) await openEditor(saved.id); await loadView(); }
   } catch (error) { autosaveBlocked = true; $('editor-error').textContent = error.message + ' Autosave paused; reopen the article to resolve changes.'; }
-  finally { savingBlog = false; $('save-blog').disabled = false; }
+  finally {
+    savingBlog = false; $('save-blog').disabled = false;
+    if (generation === editorGeneration && revision !== blogRevision && !autosaveBlocked && $('editor').open) {
+      clearTimeout(autosaveTimer); autosaveTimer = setTimeout(() => saveBlog(true), 3000);
+    }
+  }
 }
 $('blog-form')?.addEventListener('submit', async event => { event.preventDefault(); clearTimeout(autosaveTimer); await saveBlog(); });
 $('blog-form')?.addEventListener('input', () => {
+  blogRevision++;
   clearTimeout(autosaveTimer);
   if (!$('blog-form').elements.title.disabled) autosaveTimer = setTimeout(() => { if ($('editor').open) saveBlog(true); }, 3000);
 });
