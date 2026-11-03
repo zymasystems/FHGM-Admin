@@ -129,7 +129,9 @@ $('preview-blog')?.addEventListener('click', () => {
   const heading = document.createElement('h2'); heading.textContent = form.elements.title.value;
   const excerpt = document.createElement('p'); excerpt.textContent = form.elements.excerpt.value;
   const body = document.createElement('div'); body.className = 'article-body'; FhgmContent.render(body, form.elements.content.value, form.elements.contentFormat.value);
-  root.append(heading, excerpt, body);
+  root.append(heading, excerpt);
+  try { const url = new URL(form.elements.featuredImageUrl.value); if (url.protocol === 'https:') { const img = document.createElement('img'); img.src = url.href; img.alt = form.elements.title.value; img.className = 'img-fluid'; root.append(img); } } catch (_) { /* Optional image. */ }
+  root.append(body);
 });
 $('user-form')?.addEventListener('submit', async event => { event.preventDefault(); await perform(event.submitter, async () => { await api('users','POST',Object.fromEntries(new FormData(event.target))); event.target.reset(); pages.users = 1; await loadView(); notice('Team account created.'); }); });
 for (const [prefix, view] of [['blog','blogs'],['user','users'],['audit','audit']]) for (const [direction, offset] of [['prev',-1],['next',1]]) $(prefix + '-' + direction)?.addEventListener('click', () => perform($(prefix + '-' + direction), async () => { pages[view] += offset; await loadView(); }));

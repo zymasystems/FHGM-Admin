@@ -59,11 +59,11 @@
       const remove = button('Remove photo', async () => { if (!confirm('Remove this photo from the gallery?')) return; await api('gallery/images/' + image.id, 'DELETE', {}); await loadImages(); notice('Photo removed from the gallery.'); }); remove.classList.add('mt-3'); content.append(remove); card.append(content); el('gallery-images').append(card);
     }
   }
-  function putFile(url, file) {
+  function putFile(url, file, item) {
     return new Promise((resolve, reject) => {
       const request = new XMLHttpRequest(); request.open('PUT', url); request.withCredentials = false; request.timeout = 300000;
       request.setRequestHeader('Content-Type', file.type);
-      request.upload.addEventListener('progress', e => { if (e.lengthComputable) el('gallery-progress').value = Math.round(e.loaded / e.total * 100); });
+      request.upload.addEventListener('progress', e => { if (e.lengthComputable) { const percent = Math.round(e.loaded / e.total * 100); el('gallery-progress').value = percent; if (item) { item.state = 'Uploading ' + percent + '%'; drawQueue(); } } });
       request.addEventListener('load', () => request.status >= 200 && request.status < 300 ? resolve() : reject(new Error('The image could not be uploaded. Check the storage connection and try again.')));
       request.addEventListener('error', () => reject(new Error('The browser could not reach image storage. Check your connection; ask the developer to check the R2 bucket CORS origin, PUT permissions and browser console. Retry this photo after the cause is fixed.')));
       request.addEventListener('timeout', () => reject(new Error('The upload timed out. Try again on a stronger connection.')));
@@ -123,7 +123,7 @@
           if (item.uploadId) { await api('gallery/images/' + item.uploadId, 'DELETE', {}); item.uploadId = null; }
           const upload = await api('gallery/uploads', 'POST', { albumId: item.albumId, fileName: item.file.name, contentType: item.file.type, size: item.file.size, altText: item.file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ') });
           item.uploadId = upload.id;
-          await putFile(upload.uploadUrl, item.file);
+          await putFile(upload.uploadUrl, item.file, item);
           item.state = 'Verifying'; drawQueue();
           await api('gallery/images/' + upload.id + '/complete', 'POST', {});
           item.state = 'Uploaded · draft'; item.uploadId = null;

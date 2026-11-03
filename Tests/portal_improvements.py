@@ -6,7 +6,7 @@ import struct
 import time
 import datetime as dt
 import church_content_integration as church_checks
-from integration import admin, anonymous, writer, media, Client, PASSWORD, PREFIX
+from integration import admin, anonymous, other as writer, media, Client, PASSWORD, PREFIX
 
 church = church_checks.church
 comms = church_checks.comms

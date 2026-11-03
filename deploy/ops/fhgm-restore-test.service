@@ -1,0 +1,7 @@
+[Unit]
+Description=Verify newest FHGM backup in an isolated database
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/fhgm-ops.env
+ExecStart=/bin/bash /opt/fhgm/deploy/ops/test-latest-restore.sh
+UMask=0077

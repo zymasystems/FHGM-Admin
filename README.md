@@ -26,7 +26,7 @@ The backend issues host-only HttpOnly session cookies through the MVC relay. The
 
 Implemented: sign-in/logout, developer/church roles and specialist roles, gallery albums and direct-to-R2 image uploads, descriptions, publishing/unpublishing and removal, church events with automatic public expiry, scheduled popup announcements, developer monitoring, team account creation and non-super-admin activation/deactivation, blog drafts/submission/review/rejection/approval/publication/archive/restore, published-only public feed/preview, stale-edit protection, CSRF validation, password hashing/lockout, audit records, EF migrations and application/dependency health checks.
 
-Still to build: videos/YouTube, testimonials, page/settings management, password recovery/initial-password change/MFA and role reassignment. The gallery widget is supplied below for connecting the existing website; it has not been installed on the live site. Categories/tags remain text fields and blog bodies are plain text. ChurchAdmin, MediaManager and SuperAdmin can manage photos. CommunicationsManager can manage events and popup announcements.
+Still to build: videos/YouTube, testimonials, page/settings management and role reassignment. Password recovery requires SMTP setup; password changes, initial-password enforcement and authenticator MFA are implemented. The separate public website now consumes the published APIs; keep its companion renderer changes aligned with portal releases. Categories/tags remain text fields. Articles support plain text or a safe Markdown subset, autosave and featured image URLs. ChurchAdmin, MediaManager and SuperAdmin can manage photos. CommunicationsManager can manage events and popup announcements.
 
 ## Docker quick start
 
@@ -204,3 +204,12 @@ docker compose --env-file .env -f deploy/docker-compose.yml up -d
 ```
 
 `--initialize` adds the ChurchAdmin role and applies the event/popup migration while preserving existing users/passwords/content. Reopen the portal and create the church account from **Team members** using your developer account. Do not use `down -v` for an upgrade; it removes stored data.
+
+
+## Staff workflow improvements
+
+Gallery includes album search, drag-and-drop, per-photo progress/retry, selection-based publication/removal, publication summaries and cover selection. The overview shows role-scoped work awaiting attention. Blog editing adds safe formatting, preview, autosave and public article links. Events support duplication, bounded weekly occurrences, featured images and explicit South African time input; the companion website provides calendar downloads.
+
+Password & security includes password changes and authenticator enrollment with one-use recovery codes. New staff must change their initial password before content API access. Forgotten-password links require configured SMTP. Existing accounts and content are preserved by the additive migration.
+
+See [operations setup](deploy/ops/README.md) for the deployment order, SMTP, backup/restore jobs, alert setup and R2 probe. These services need installation/configuration on the VPS; committing their code does not activate them.
