@@ -81,7 +81,9 @@ assert "Activity log" in admin.request("/admin/audit")
 writer.request("/admin/users", expected=403)
 writer.request("/admin/audit", expected=403)
 media.request("/admin/blogs", expected=403)
-assert "Portal development" in media.request("/admin/")
+media_dashboard = media.request("/admin/")
+assert "Content overview" in media_dashboard
+assert "Keep your ministry moving" in media_dashboard
 # Typed HttpClient must never share a cookie jar between MVC users.
 assert writer.request("/api/auth/me")["id"] == w["id"]
 assert admin.request("/api/auth/me")["email"] == os.environ["Bootstrap__Email"]
@@ -159,4 +161,3 @@ editor.request("/api/audit", expected=403)
 admin.request("/api/auth/logout", "POST", {}, expected=204)
 admin.request("/api/users", expected=401)
 print(f"PASS: {checks} HTTP checks plus MVC access, session isolation, content, workflow, ownership and audit assertions.")
-

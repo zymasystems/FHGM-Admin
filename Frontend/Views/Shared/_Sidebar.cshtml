@@ -2,28 +2,28 @@
     <a class="brand ministry-brand" asp-controller="Dashboard" asp-action="Index"><img src="~/images/ministry-logo.png" alt="For His Grace Ministries"><span>For His Grace<br>Ministries</span></a>
     <p class="eyebrow">ADMINISTRATION PORTAL</p>
     <nav aria-label="Administration">
-        <a class="nav-item" href="/account/security">Password & security</a>
         <a class="nav-item @(ViewData["ActiveView"]?.ToString() == "overview" ? "selected" : "")" asp-controller="Dashboard" asp-action="Index">Overview</a>
         @if (User.IsInRole("SuperAdmin") || User.IsInRole("ChurchAdmin") || User.IsInRole("MediaManager"))
-        { <a class="nav-item" asp-controller="Dashboard" asp-action="Gallery">Photo gallery</a> }
+        { <a class="nav-item @(ViewData["ActiveView"]?.ToString() == "gallery" ? "selected" : "")" asp-controller="Dashboard" asp-action="Gallery">Photo gallery</a> }
         @if (User.IsInRole("SuperAdmin") || User.IsInRole("ChurchAdmin") || User.IsInRole("Writer") || User.IsInRole("BlogEditor"))
-        { <a class="nav-item" asp-controller="Dashboard" asp-action="Blogs">Blog articles</a> }
+        { <a class="nav-item @(ViewData["ActiveView"]?.ToString() == "blogs" ? "selected" : "")" asp-controller="Dashboard" asp-action="Blogs">Blog articles</a> }
         @if (User.IsInRole("SuperAdmin"))
         {
-            <a class="nav-item" asp-controller="Dashboard" asp-action="Monitoring">Monitoring</a>
-            <a class="nav-item" asp-controller="Dashboard" asp-action="Users">Team members</a>
-            <a class="nav-item" asp-controller="Dashboard" asp-action="Audit">Activity log</a>
+            <a class="nav-item @(ViewData["ActiveView"]?.ToString() == "monitoring" ? "selected" : "")" asp-controller="Dashboard" asp-action="Monitoring">Monitoring</a>
+            <a class="nav-item @(ViewData["ActiveView"]?.ToString() == "users" ? "selected" : "")" asp-controller="Dashboard" asp-action="Users">Team members</a>
+            <a class="nav-item @(ViewData["ActiveView"]?.ToString() == "audit" ? "selected" : "")" asp-controller="Dashboard" asp-action="Audit">Activity log</a>
         }
         @if (User.IsInRole("SuperAdmin") || User.IsInRole("ChurchAdmin") || User.IsInRole("CommunicationsManager"))
         {
-            <a class="nav-item" asp-controller="Dashboard" asp-action="Events">Events</a>
-            <a class="nav-item" asp-controller="Dashboard" asp-action="Popups">Popup announcements</a>
+            <a class="nav-item @(ViewData["ActiveView"]?.ToString() == "events" ? "selected" : "")" asp-controller="Dashboard" asp-action="Events">Events</a>
+            <a class="nav-item @(ViewData["ActiveView"]?.ToString() == "popups" ? "selected" : "")" asp-controller="Dashboard" asp-action="Popups">Popup announcements</a>
         }
     </nav>
     <div class="sidebar-bottom">
         <a href="https://hisgraceministries.co.za/" target="_blank" rel="noopener">View ministry website ↗</a>
         <a href="/public/" target="_blank" rel="noopener">Preview CMS blog feed ↗</a>
         <a href="/public/events" target="_blank" rel="noopener">Preview events & popups ↗</a>
+        <a class="nav-item @(Context.Request.Path.StartsWithSegments("/account/security") ? "selected" : "")" href="/account/security">Password & security</a>
         <p id="identity">@User.Identity?.Name</p>
         <button id="logout" class="btn btn-outline-secondary outline">Sign out</button>
     </div>
