@@ -3,7 +3,7 @@
     <p class="eyebrow">ADMINISTRATION PORTAL</p>
     <nav aria-label="Administration">
         <a class="nav-item" href="/account/security">Password & security</a>
-        <a class="nav-item" asp-controller="Dashboard" asp-action="Index">Overview</a>
+        <a class="nav-item @(ViewData["ActiveView"]?.ToString() == "overview" ? "selected" : "")" asp-controller="Dashboard" asp-action="Index">Overview</a>
         @if (User.IsInRole("SuperAdmin") || User.IsInRole("ChurchAdmin") || User.IsInRole("MediaManager"))
         { <a class="nav-item" asp-controller="Dashboard" asp-action="Gallery">Photo gallery</a> }
         @if (User.IsInRole("SuperAdmin") || User.IsInRole("ChurchAdmin") || User.IsInRole("Writer") || User.IsInRole("BlogEditor"))
@@ -28,4 +28,3 @@
         <button id="logout" class="btn btn-outline-secondary outline">Sign out</button>
     </div>
 </aside>
-

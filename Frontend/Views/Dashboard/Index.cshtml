@@ -15,23 +15,66 @@
             case "popups": <partial name="_Popups" /> break;
             case "monitoring": <partial name="_Monitoring" /> break;
             default:
-                <section>
-                    <div class="page-heading"><div><p class="eyebrow">SERVING HIS PURPOSE</p><h1>Welcome, @User.Identity?.Name</h1><p class="muted">Prepare and share the stories of For His Grace Ministries.</p></div></div>
-                    <div id="dashboard-summary" class="summary" role="region" aria-label="Content needing attention">Loading your content summary…</div>
-                    <div class="summary">
-                        <div><p class="eyebrow">YOUR MINISTRY WORKSPACE</p><h2>Share your church family</h2><p class="muted">Create albums, upload photos and choose what appears in the website gallery.</p>
-                        @if (User.IsInRole("SuperAdmin") || User.IsInRole("ChurchAdmin") || User.IsInRole("MediaManager"))
-                        { <a class="btn btn-primary primary" asp-action="Gallery">Manage photo gallery →</a> }
-                        @if (User.IsInRole("SuperAdmin") || User.IsInRole("ChurchAdmin") || User.IsInRole("Writer") || User.IsInRole("BlogEditor"))
-                        { <a class="btn btn-primary primary" asp-action="Blogs">Manage blog articles →</a> }
+                <section class="dashboard-overview">
+                    <div class="dashboard-welcome">
+                        <div>
+                            <p class="eyebrow">YOUR MINISTRY WORKSPACE</p>
+                            <h1>Welcome back, @User.Identity?.Name</h1>
+                            <p>Here’s what’s happening across For His Grace Ministries today.</p>
                         </div>
-                        <div><p class="eyebrow">FOR HIS GRACE MINISTRIES</p><h2>Growing in Grace.<br>Living by Faith.</h2><p class="muted">This portal supports the ministry website.</p><a href="https://hisgraceministries.co.za/" target="_blank" rel="noopener">Visit the ministry website ↗</a></div>
+                        <span class="dashboard-live"><span></span> Workspace active</span>
                     </div>
+
+                    <div class="dashboard-section-heading">
+                        <div><p class="eyebrow">AT A GLANCE</p><h2>Content overview</h2></div>
+                        <span class="dashboard-updated">Live workspace summary</span>
+                    </div>
+                    <div id="dashboard-summary" class="dashboard-summary" role="region" aria-label="Content needing attention" aria-live="polite">
+                        <div class="dashboard-loading">Loading your content summary…</div>
+                    </div>
+
+                    <div class="dashboard-section-heading dashboard-actions-heading">
+                        <div><p class="eyebrow">QUICK ACCESS</p><h2>Keep your ministry moving</h2></div>
+                    </div>
+                    <div class="dashboard-quick-grid">
+                        @if (User.IsInRole("SuperAdmin") || User.IsInRole("ChurchAdmin") || User.IsInRole("MediaManager"))
+                        {
+                            <a class="dashboard-action-card" asp-action="Gallery">
+                                <span class="dashboard-action-icon" aria-hidden="true">▧</span>
+                                <span><strong>Photo gallery</strong><small>Organize albums and share ministry moments.</small></span>
+                                <span class="dashboard-arrow" aria-hidden="true">↗</span>
+                            </a>
+                        }
+                        @if (User.IsInRole("SuperAdmin") || User.IsInRole("ChurchAdmin") || User.IsInRole("Writer") || User.IsInRole("BlogEditor"))
+                        {
+                            <a class="dashboard-action-card" asp-action="Blogs">
+                                <span class="dashboard-action-icon" aria-hidden="true">✎</span>
+                                <span><strong>Blog articles</strong><small>Write, review and publish stories of faith.</small></span>
+                                <span class="dashboard-arrow" aria-hidden="true">↗</span>
+                            </a>
+                        }
+                        @if (User.IsInRole("SuperAdmin") || User.IsInRole("ChurchAdmin") || User.IsInRole("CommunicationsManager"))
+                        {
+                            <a class="dashboard-action-card" asp-action="Events">
+                                <span class="dashboard-action-icon" aria-hidden="true">▦</span>
+                                <span><strong>Events & announcements</strong><small>Keep your church family up to date.</small></span>
+                                <span class="dashboard-arrow" aria-hidden="true">↗</span>
+                            </a>
+                        }
+                        <a class="dashboard-action-card" href="/account/security">
+                            <span class="dashboard-action-icon" aria-hidden="true">◇</span>
+                            <span><strong>Account security</strong><small>Review your password and sign-in protection.</small></span>
+                            <span class="dashboard-arrow" aria-hidden="true">↗</span>
+                        </a>
+                    </div>
+
                     @if (User.IsInRole("SuperAdmin") || User.IsInRole("ChurchAdmin") || User.IsInRole("CommunicationsManager"))
                     {
-                        <div class="panel p-4"><h2>Keep your church informed</h2><p class="muted">Post events and schedule popup announcements. Events leave the public feed after their end time; announcements display only during their scheduled period.</p><div class="d-flex gap-3 flex-wrap"><a class="btn primary" asp-action="Events">Manage events</a><a class="btn outline" asp-action="Popups">Manage popups</a></div></div>
+                        <div class="dashboard-ministry-note">
+                            <div><p class="eyebrow">FOR HIS GRACE MINISTRIES</p><h2>Growing in grace. Living by faith.</h2><p>Share what God is doing in your church family with the people who need to hear it.</p></div>
+                            <a href="https://hisgraceministries.co.za/" target="_blank" rel="noopener">Visit ministry website <span aria-hidden="true">↗</span></a>
+                        </div>
                     }
-                    <div class="panel p-4"><h2>Portal development</h2><p class="muted mb-0">Gallery, blog, events and popup publishing are available. Developer Super Admins also have account management, monitoring and audit access.</p></div>
                 </section>
                 break;
         }
@@ -46,4 +89,3 @@
     @if (Model.ActiveView == "events" || Model.ActiveView == "popups") { <script src="~/admin/church-content.js" asp-append-version="true" defer></script> }
     @if (Model.ActiveView == "monitoring") { <script src="~/admin/monitoring.js" asp-append-version="true" defer></script> }
 }
-
