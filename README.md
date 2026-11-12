@@ -253,3 +253,9 @@ Gallery uploads use a worker pool of at most three simultaneous uploads. Selecte
 For administrators, manual **Save & review** validates and saves the article, then opens its website preview in the same dialog. Back to editing returns to the form; Cancel leaves the saved draft/revision private. Publication remains an explicit reviewed action. Other roles retain their submission/approval rules.
 
 An additive migration adds a nullable private `PendingRevisionJson` column to the existing BlogPosts table. Saving an edit to a published article writes this pending revision only. Staff read/preview responses load it; public feeds/details continue using the live columns. Explicit Publish atomically applies the revision, clears it and increments the concurrency version. Unpublish/archive hides the article and retains the working revision as normal hidden content. No duplicate article tables or public draft endpoints are created. Apply migrations through the normal backend initialization step; rollback refuses to discard unresolved revisions.
+
+## Direct Bulk Upload entry point
+
+The Gallery Management heading includes a **Bulk Upload** button. One click switches to bulk mode and opens the native multiple-file picker; users can select a group with Ctrl/Shift and upload the entire selected batch once. The existing Single image mode and optional No album/album selector are preserved. Previews/removal and a maximum of three concurrent uploads use the existing verified storage endpoints. Uploaded images retain the existing draft/publication rules.
+
+Browser checks exercise the actual file-chooser event, assert multiple selection, and simulate a partial batch failure. They verify retry reuses the failed record and retains all completed image IDs. No additional backend/schema change is required: the upload DTO already accepts nullable AlbumId, the relationship is nullable, and published standalone images already have a public gallery feed.

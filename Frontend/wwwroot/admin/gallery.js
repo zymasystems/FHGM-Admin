@@ -14,9 +14,10 @@
   function uploadLabels() {
     const bulk = uploadMode() === 'bulk';
     el('gallery-files').multiple = bulk;
+    el('gallery-picker-help').textContent = bulk ? 'Choose up to 20 images in one selection. Use Ctrl to select individual files, Shift to select a range, or drag a group of photos here.' : 'Choose one image, or select Bulk Upload to choose several files together.';
     el('gallery-file-prompt').textContent = bulk ? '3. Choose multiple images' : '3. Choose your image';
     el('gallery-upload').disabled = uploading || !configured || !chosenFiles.length;
-    el('gallery-upload').textContent = bulk ? `Upload ${chosenFiles.length || 'selected'} images` : 'Upload single image';
+    el('gallery-upload').textContent = bulk ? `Bulk Upload ${chosenFiles.length || 'selected'} images` : 'Upload single image';
     el('upload-destination').textContent = selected ? 'Uploading to: ' + selected.title : 'Create or choose an album before uploading.';
   }
 
@@ -52,7 +53,7 @@
     chosenFiles = candidates; syncFileInput(); drawFilePreviews();
   }
   function lockUploadControls(locked) {
-    el('gallery-files').disabled = locked; el('album-select').disabled = locked; el('album-new').disabled = locked;
+    el('gallery-bulk-start').disabled = locked; el('gallery-files').disabled = locked; el('album-select').disabled = locked; el('album-new').disabled = locked;
     el('gallery-clear-files').disabled = locked;
     for (const radio of uploadForm.elements.uploadMode) radio.disabled = locked;
     drawFilePreviews();
@@ -225,6 +226,11 @@
       queue = files.map(file => ({ file, albumId: selected.id, state: 'Waiting', uploadId: null, done: false }));
       chosenFiles = []; syncFileInput(); drawFilePreviews(); await runQueue(queue);
     }).finally(uploadLabels);
+  });
+  el('gallery-bulk-start').addEventListener('click', () => {
+    if (uploading) return;
+    const mode = uploadForm.querySelector('[name=uploadMode][value=bulk]'); mode.checked = true; mode.dispatchEvent(new Event('change'));
+    el('gallery-files').click();
   });
   el('gallery-files').addEventListener('change', event => chooseFiles(event.target.files));
   el('gallery-clear-files').addEventListener('click', () => { if (uploading) return; chosenFiles = []; syncFileInput(); el('gallery-file-error').textContent = ''; drawFilePreviews(); });
