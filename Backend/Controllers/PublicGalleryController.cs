@@ -9,6 +9,17 @@ namespace FHGM.Backend.Controllers;
 [ApiController, Route("api/public/gallery"), AllowAnonymous]
 public sealed class PublicGalleryController(AppDbContext db, GalleryStorage storage) : ControllerBase
 {
+    [HttpGet("images")]
+    public async Task<IActionResult> Images(int page = 1)
+    {
+        if (page < 1 || page > 10000) return BadRequest();
+        var query = db.GalleryImages.AsNoTracking().Where(x => x.AlbumId == null && x.IsComplete && x.IsPublished && !x.IsDeleted);
+        var items = await query.OrderByDescending(x => x.CreatedAt).Skip((page - 1) * 24).Take(24)
+            .Select(x => new { x.AltText, x.Caption, x.StorageKey }).ToListAsync();
+        return Ok(new { title = "Photos", description = "", total = await query.CountAsync(), page,
+            items = items.Select(x => new { x.AltText, x.Caption, url = storage.PublicUrl(x.StorageKey) }) });
+    }
+
     [HttpGet("albums")]
     public async Task<IActionResult> Albums(int page = 1)
     {

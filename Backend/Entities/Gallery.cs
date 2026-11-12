@@ -18,8 +18,8 @@ public sealed class GalleryAlbum
 public sealed class GalleryImage
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid AlbumId { get; set; }
-    public GalleryAlbum Album { get; set; } = null!;
+    public Guid? AlbumId { get; set; }
+    public GalleryAlbum? Album { get; set; }
     [MaxLength(255)] public string FileName { get; set; } = "";
     [MaxLength(300)] public string AltText { get; set; } = "";
     [MaxLength(1000)] public string Caption { get; set; } = "";

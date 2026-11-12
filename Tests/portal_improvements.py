@@ -38,6 +38,38 @@ post = writer.request('/api/blog','POST',{'title':'Formatted','slug':PREFIX+'-fo
 assert post['contentFormat'] == 'Markdown'
 writer.request('/api/blog','POST',{'title':'Unsafe','slug':PREFIX+'-unsafe-blog','excerpt':'Preview','content':'Text','contentFormat':'HTML'},expected=400)
 
+# Admins publish drafts after their own review; writers cannot bypass approval or delete.
+for actor, suffix in [(admin, 'developer'), (church, 'church')]:
+    draft = actor.request('/api/blog', 'POST', {'title':'Admin article', 'slug':PREFIX+'-'+suffix+'-direct', 'excerpt':'Reviewed', 'content':'Ready for publication'}, expected=201)
+    path = '/api/blog/'+draft['id']
+    actor.request(path+'/workflow', 'POST', {'action':'publish','version':draft['version']}, expected=400)
+    writer.request(path+'/workflow', 'POST', {'action':'publish','version':draft['version'],'reviewed':True}, expected=404)
+    published = actor.request(path+'/workflow', 'POST', {'action':'publish','version':draft['version'],'reviewed':True})
+    assert published['status'] == 'Published'
+    public_path = '/api/public/blog/'+published['slug']
+    anonymous.request(public_path)
+    writer.request(path+'?version='+str(published['version']), 'DELETE', expected=403)
+    actor.request(path+'?version='+str(draft['version']), 'DELETE', expected=409)
+    actor.request(path+'?version='+str(published['version']), 'DELETE', expected=204)
+    anonymous.request(public_path, expected=404)
+    actor.request(path, expected=404)
+
+# Standalone uploads share album upload verification, but need no album publication.
+from gallery_integration import put, valid
+for index in range(2):
+    upload = media.request('/api/gallery/uploads','POST',{'albumId':None,'fileName':'standalone-'+str(index)+'.png','contentType':'image/png','size':len(valid),'altText':PREFIX+' standalone '+str(index)},expected=201)
+    path = '/api/gallery/images/'+upload['id']
+    put(upload['uploadUrl'], valid)
+    completed = media.request(path+'/complete','POST',{})
+    assert any(x['id'] == upload['id'] for x in media.request('/api/gallery/images')['items'])
+    assert not any(x['altText'] == PREFIX+' standalone '+str(index) for x in anonymous.request('/api/public/gallery/images')['items'])
+    media.request(path,'PUT',{'altText':PREFIX+' standalone '+str(index),'caption':'','isPublished':True,'version':completed['version']})
+    assert any(x['altText'] == PREFIX+' standalone '+str(index) for x in anonymous.request('/api/public/gallery/images')['items'])
+    media.request(path,'DELETE',expected=202)
+    assert not any(x['altText'] == PREFIX+' standalone '+str(index) for x in anonymous.request('/api/public/gallery/images')['items'])
+writer.request('/api/gallery/images',expected=403)
+anonymous.request('/api/public/gallery/images?page=0',expected=400)
+
 # Existing initial-password helper already verifies backend enforcement and performs a password change.
 assert church.request('/api/security')['mustChangePassword'] is False
 setup = church.request('/api/security/mfa/setup','POST',{'password':PASSWORD})

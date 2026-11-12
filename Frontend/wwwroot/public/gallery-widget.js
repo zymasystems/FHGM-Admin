@@ -1,8 +1,15 @@
 (() => {
   'use strict';
+  const roots = [];
   for (const root of document.querySelectorAll('[data-fhgm-gallery]')) {
+    const photos = document.createElement('div'); photos.dataset.api = root.dataset.api || '/api/public/gallery'; photos.dataset.standalone = 'true'; photos.setAttribute('data-fhgm-gallery', '');
+    root.after(photos); roots.push(root, photos);
+  }
+  for (const root of roots) {
+    const standalone = root.dataset.standalone === 'true';
     const apiBase = (root.dataset.api || '/api/public/gallery').replace(/\/$/, '');
     let page = 1, currentAlbum = null;
+    const isPhotos = () => standalone || !!currentAlbum;
     const status = document.createElement('p'); status.setAttribute('role', 'status');
     const heading = document.createElement('h2'), description = document.createElement('p');
     const back = document.createElement('button'); back.type = 'button'; back.className = 'fhgm-gallery-button'; back.textContent = '← All albums'; back.hidden = true;
@@ -13,19 +20,20 @@
     async function load() {
       previous.disabled = next.disabled = true; status.textContent = 'Loading gallery…'; grid.replaceChildren();
       try {
-        const response = await fetch(apiBase + '/albums' + (currentAlbum ? '/' + encodeURIComponent(currentAlbum) : '') + '?page=' + page, { credentials: 'omit' });
+        const response = await fetch(apiBase + (standalone ? '/images' : '/albums' + (currentAlbum ? '/' + encodeURIComponent(currentAlbum) : '')) + '?page=' + page, { credentials: 'omit' });
         if (!response.ok) throw new Error('The gallery is unavailable. Please try again later.');
-        const data = await response.json(); heading.textContent = currentAlbum ? data.title : 'Photo albums'; description.textContent = currentAlbum ? data.description : ''; back.hidden = !currentAlbum;
+        const data = await response.json(); heading.textContent = isPhotos() ? data.title : 'Photo albums'; description.textContent = isPhotos() ? data.description : ''; back.hidden = !currentAlbum;
+        root.hidden = standalone && data.total === 0;
         status.textContent = data.total ? '' : currentAlbum ? 'There are no published photos in this album yet.' : 'New ministry photos will appear here soon.';
         for (const item of data.items) {
           const figure = document.createElement('figure'); figure.className = 'fhgm-gallery-card';
-          const img = document.createElement('img'); img.src = currentAlbum ? item.url : item.coverUrl; img.alt = currentAlbum ? item.altText : item.title; img.loading = 'lazy'; img.decoding = 'async';
-          const caption = document.createElement('figcaption'); caption.textContent = currentAlbum ? item.caption : item.title + ' · ' + item.imageCount + ' photos';
-          if (currentAlbum) { const link = document.createElement('a'); link.href = item.url; link.target = '_blank'; link.rel = 'noopener'; link.append(img); figure.append(link, caption); }
+          const img = document.createElement('img'); img.src = isPhotos() ? item.url : item.coverUrl; img.alt = isPhotos() ? item.altText : item.title; img.loading = 'lazy'; img.decoding = 'async';
+          const caption = document.createElement('figcaption'); caption.textContent = isPhotos() ? item.caption : item.title + ' · ' + item.imageCount + ' photos';
+          if (isPhotos()) { const link = document.createElement('a'); link.href = item.url; link.target = '_blank'; link.rel = 'noopener'; link.append(img); figure.append(link, caption); }
           else { const open = document.createElement('button'); open.type = 'button'; open.className = 'fhgm-gallery-album'; open.append(img, caption); open.addEventListener('click', () => { currentAlbum = item.slug; page = 1; load(); }); figure.append(open); }
           grid.append(figure);
         }
-        count.textContent = 'Page ' + page; previous.disabled = page <= 1; next.disabled = page * (currentAlbum ? 24 : 20) >= data.total;
+        count.textContent = 'Page ' + page; previous.disabled = page <= 1; next.disabled = page * (isPhotos() ? 24 : 20) >= data.total;
       } catch (error) { status.textContent = error.message; }
     }
     back.addEventListener('click', () => { currentAlbum = null; page = 1; load(); }); previous.addEventListener('click', () => { page--; load(); }); next.addEventListener('click', () => { page++; load(); }); load();

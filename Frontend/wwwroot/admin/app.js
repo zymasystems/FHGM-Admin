@@ -1,6 +1,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
-let editorGeneration = 0, blogRevision = 0;
+let editorGeneration = 0, blogRevision = 0, reviewedVersion = null;
+const isBlogAdmin = () => me.roles.some(r => ["SuperAdmin", "ChurchAdmin"].includes(r));
 let savingBlog = false, autosaveTimer = null, autosaveBlocked = false;
 let csrf = '', me = null, current = null, activeView = document.body.dataset.view || 'overview';
 const pages = { blogs: 1, users: 1, audit: 1 };
@@ -41,6 +42,7 @@ async function loadView() {
       const tr = document.createElement('tr'); cell(tr, post.title);
       const badge = document.createElement('span'); badge.className = 'badge ' + post.status; badge.textContent = label(post.status); cell(tr, '').append(badge);
       cell(tr, post.author); cell(tr, date(post.updatedAt)); const actions = cell(tr, ''); actions.append(button('Open →', () => openEditor(post.id)));
+      if (isBlogAdmin()) actions.append(button('Delete', async () => { if (!confirm(`Permanently delete “${post.title}”? This also removes it from the public website.`)) return; await api('blog/' + post.id + '?version=' + post.version, 'DELETE'); await loadView(); notice('Article deleted.'); }));
       if (post.status === 'Published') { const view = document.createElement('a'); view.href = 'https://hisgraceministries.co.za/blog-post.html?slug=' + encodeURIComponent(post.slug); view.target = '_blank'; view.rel = 'noopener'; view.textContent = ' View on website'; actions.append(view); } $('blog-rows').append(tr);
     }
     pagination('blog', data, 25);
@@ -60,7 +62,7 @@ async function loadView() {
 }
 const fields = ['title','slug','excerpt','content','category','tags','seoTitle','seoDescription','contentFormat','featuredImageUrl'];
 async function openEditor(id) {
-  editorGeneration++; blogRevision = 0;
+  editorGeneration++; blogRevision = 0; reviewedVersion = null;
   clearTimeout(autosaveTimer); autosaveBlocked = false; $('article-preview').hidden = true;
   current = id ? await api('blog/' + id) : null;
   $('blog-form').reset(); $('editor-error').textContent = '';
@@ -73,6 +75,7 @@ async function openEditor(id) {
   $('save-blog').hidden = !editable; $('save-blog').textContent = current ? 'Save changes' : 'Save draft'; $('workflow').replaceChildren();
   if (current) {
     const actions = { Draft:[['submit','Submit for review']], ChangesRequested:[['submit','Resubmit for review']], Rejected:[['submit','Resubmit for review']], Submitted:[['request-changes','Request changes'],['reject','Reject'],['approve','Approve article']], Approved:[['publish','Publish article'],['archive','Archive']], Published:[['archive','Archive / unpublish']], Archived:[['restore','Restore to draft']] };
+    if (isBlogAdmin() && ['Draft','ChangesRequested','Rejected','Submitted'].includes(current.status)) actions[current.status] = [...(current.status === 'Submitted' ? [['request-changes','Request changes'],['reject','Reject']] : []), ['publish', 'Publish reviewed article']];
     for (const [action, text] of actions[current.status] || []) {
       if (!isEditor() && action !== 'submit') continue;
       $('workflow').append(button(text, async () => {
@@ -82,8 +85,9 @@ async function openEditor(id) {
         if (editable && fields.some(key => (data.get(key) || '') !== (current[key] || (key === 'contentFormat' ? 'PlainText' : '')))) { $('editor-error').textContent = 'Save your changes before continuing the workflow.'; return; }
         let note = '';
         if (['request-changes','reject'].includes(action)) { note = prompt('Add a review note for the writer:'); if (note === null) return; }
+        if (action === 'publish' && isBlogAdmin() && reviewedVersion !== current.version) { $('editor-error').textContent = 'Use Preview to review the saved article before publishing.'; return; }
         if (action === 'publish' && !confirm('Publish this article on the public website?')) return;
-        try { await api('blog/' + current.id + '/workflow', 'POST', { action, version: current.version, note }); const articleId = current.id; await openEditor(articleId); await loadView(); } catch (error) { $('editor-error').textContent = error.message; }
+        try { await api('blog/' + current.id + '/workflow', 'POST', { action, version: current.version, note, reviewed: reviewedVersion === current.version }); const articleId = current.id; await openEditor(articleId); await loadView(); } catch (error) { $('editor-error').textContent = error.message; }
       }));
     }
   }
@@ -106,7 +110,7 @@ async function saveBlog(automatic = false) {
     const body = Object.fromEntries(new FormData(form)); body.version = current?.version || 1;
     const saved = await api(current ? 'blog/' + current.id : 'blog', current ? 'PUT' : 'POST', body);
     if (generation !== editorGeneration) return;
-    current = saved; $('autosave-status').textContent = `Saved at ${new Date().toLocaleTimeString()} · Version ${saved.version}`;
+    reviewedVersion = null; current = saved; $('autosave-status').textContent = `Saved at ${new Date().toLocaleTimeString()} · Version ${saved.version}`;
     if (!automatic) { if (revision === blogRevision) await openEditor(saved.id); await loadView(); }
   } catch (error) { autosaveBlocked = true; $('editor-error').textContent = error.message + ' Autosave paused; reopen the article to resolve changes.'; }
   finally {
@@ -118,7 +122,7 @@ async function saveBlog(automatic = false) {
 }
 $('blog-form')?.addEventListener('submit', async event => { event.preventDefault(); clearTimeout(autosaveTimer); await saveBlog(); });
 $('blog-form')?.addEventListener('input', () => {
-  blogRevision++;
+  reviewedVersion = null; blogRevision++;
   clearTimeout(autosaveTimer);
   if (!$('blog-form').elements.title.disabled) autosaveTimer = setTimeout(() => { if ($('editor').open) saveBlog(true); }, 3000);
 });
@@ -131,7 +135,11 @@ $('format-toolbar')?.addEventListener('click', event => {
   form.elements.contentFormat.value = 'Markdown'; input.setRangeText(value, input.selectionStart, input.selectionEnd, 'end'); input.dispatchEvent(new Event('input', {bubbles:true})); input.focus();
 });
 $('preview-blog')?.addEventListener('click', () => {
-  const root = $('article-preview'), form = $('blog-form'); root.hidden = false; root.replaceChildren();
+  const root = $('article-preview'), form = $('blog-form');
+  const data = new FormData(form);
+  reviewedVersion = current && !savingBlog && fields.every(key => (form.elements[key].value || '') === (current[key] || (key === 'contentFormat' ? 'PlainText' : ''))) ? current.version : null;
+  if (isBlogAdmin()) $('editor-error').textContent = reviewedVersion === null ? 'Save your changes, then preview again before publishing.' : 'Review the preview below, then choose Publish reviewed article.';
+  root.hidden = false; root.replaceChildren();
   const heading = document.createElement('h2'); heading.textContent = form.elements.title.value;
   const excerpt = document.createElement('p'); excerpt.textContent = form.elements.excerpt.value;
   const body = document.createElement('div'); body.className = 'article-body'; FhgmContent.render(body, form.elements.content.value, form.elements.contentFormat.value);
