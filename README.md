@@ -221,3 +221,11 @@ Gallery uploads offer Single image or Bulk images (up to 20 per batch). Choose *
 ChurchAdmin and SuperAdmin can save an article, preview the saved version, and publish without submission/approval. Editing or saving invalidates the preview. Writer and BlogEditor workflows retain their existing permissions. Admins can permanently delete articles from the article list after confirmation; the API checks the current version and records the deletion in the audit log.
 
 Apply the new standalone-image migration with the normal backend `--initialize` deployment step before starting the updated applications. Existing albums and photos are preserved. Update the public gallery widget too; custom renderers on the separate website must consume `/api/public/gallery/images` to display standalone photos.
+
+## Administrator blog controls
+
+ChurchAdmin and SuperAdmin can preview, edit, publish, unpublish, archive and delete articles from the blog list. Submitted articles display as **Pending Review**; underlying workflow values are unchanged. Administrators can edit articles at every stage and publish their own reviewed content without submission/approval. Writer and BlogEditor permissions retain the existing workflow.
+
+Published articles remain editable, but do not autosave. Preview the exact changed form content and choose **Save published changes**, then confirm, to update the live article. The API requires the current version and a review acknowledgement for published edits. Unpublish returns an article to Draft; archive hides it without deleting it. Deletion is permanent, version-checked, confirmed and audited.
+
+The isolated website preview uses the companion website's blog page shell, styles and safe content renderer, with desktop/mobile widths. It does not publish or expose a draft API. The preview assets under `Frontend/wwwroot/website-preview` are a snapshot of `ForHisGraceMinistries` (source commit e6495c23ddc2ae6bf9ce2419f55f3f01d5db0c60); keep them aligned when the public site's article layout changes. Website logos/fonts/images may need network access to display. No schema migration is required for these blog changes.

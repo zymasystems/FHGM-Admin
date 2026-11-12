@@ -48,6 +48,26 @@ for actor, suffix in [(admin, 'developer'), (church, 'church')]:
     assert published['status'] == 'Published'
     public_path = '/api/public/blog/'+published['slug']
     anonymous.request(public_path)
+    change = {'title':'Updated admin article','slug':published['slug'],'excerpt':'Updated preview','content':'Reviewed live update','version':published['version']}
+    actor.request(path, 'PUT', change, expected=400)
+    writer.request(path, 'PUT', {**change,'reviewed':True}, expected=404)
+    from integration import editor
+    editor.request(path, 'PUT', {**change,'reviewed':True}, expected=409)
+    published = actor.request(path, 'PUT', {**change,'reviewed':True})
+    assert published['status'] == 'Published'
+    assert anonymous.request(public_path)['content'] == 'Reviewed live update'
+    actor.request(path, 'PUT', {**change,'reviewed':True}, expected=409)
+    editor.request(path+'/workflow','POST',{'action':'unpublish','version':published['version']},expected=403)
+    unpublished = actor.request(path+'/workflow','POST',{'action':'unpublish','version':published['version']})
+    assert unpublished['status'] == 'Draft' and unpublished['publishedAt'] is None
+    anonymous.request(public_path,expected=404)
+    archived = actor.request(path+'/workflow','POST',{'action':'archive','version':unpublished['version']})
+    assert archived['status'] == 'Archived'
+    updated = actor.request(path, 'PUT', {**change,'version':archived['version'],'content':'Updated while archived'})
+    assert updated['status'] == 'Archived'
+    anonymous.request(public_path,expected=404)
+    published = actor.request(path+'/workflow','POST',{'action':'publish','version':updated['version'],'reviewed':True})
+    assert anonymous.request(public_path)['content'] == 'Updated while archived'
     writer.request(path+'?version='+str(published['version']), 'DELETE', expected=403)
     actor.request(path+'?version='+str(draft['version']), 'DELETE', expected=409)
     actor.request(path+'?version='+str(published['version']), 'DELETE', expected=204)

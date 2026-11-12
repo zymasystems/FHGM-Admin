@@ -33,7 +33,10 @@ public sealed class BlogsController(IBlogRepository blogs, UserManager<AppUser> 
     {
         var post = await blogs.Read().FirstOrDefaultAsync(x => x.Id == id);
         if (post is null || (!IsEditor && post.AuthorId != UserId)) return NotFound();
-        return Ok(post);
+        return Ok(new { post.Id, post.Title, post.Slug, post.Excerpt, post.Content, post.Category, post.Tags,
+            post.SeoTitle, post.SeoDescription, post.FeaturedImageUrl, post.ContentFormat, post.AuthorId,
+            post.Status, post.ReviewNote, post.Version, post.CreatedAt, post.UpdatedAt, post.SubmittedAt,
+            post.ApprovedAt, post.PublishedAt, author = await users.Users.Where(x => x.Id == post.AuthorId).Select(x => x.DisplayName).FirstOrDefaultAsync() });
     }
 
     [HttpPost]
@@ -52,12 +55,14 @@ public sealed class BlogsController(IBlogRepository blogs, UserManager<AppUser> 
     {
         var post = await blogs.FindAsync(id);
         if (post is null || (!IsEditor && post.AuthorId != UserId)) return NotFound();
-        if (!BlogWorkflow.CanEdit(post.Status) || (!IsEditor && post.Status == BlogStatus.Submitted))
+        if (!IsAdmin && (!BlogWorkflow.CanEdit(post.Status) || (!IsEditor && post.Status == BlogStatus.Submitted)))
             return Conflict(new { message = "This article cannot be edited at its current stage. Archive and restore a published article before revising it." });
         if (post.Version != request.Version) return Conflict(new { message = "Reload this article; someone else changed it." });
+        if (post.Status == BlogStatus.Published && !request.Reviewed)
+            return BadRequest(new { message = "Preview the updated article before saving changes to the live website." });
         Apply(post, request);
         post.Version++;
-        audit.Record("BlogEdited", "BlogPost", post.Id.ToString());
+        audit.Record(post.Status == BlogStatus.Published ? "BlogPublishedContentEdited" : "BlogEdited", "BlogPost", post.Id.ToString());
         await blogs.SaveAsync();
         return Ok(post);
     }
@@ -69,10 +74,14 @@ public sealed class BlogsController(IBlogRepository blogs, UserManager<AppUser> 
         if (post is null || (!IsEditor && post.AuthorId != UserId)) return NotFound();
         if (!IsEditor && request.Action != "submit") return Forbid();
         if (post.Version != request.Version) return Conflict(new { message = "Reload this article; someone else changed it." });
-        var directPublish = IsAdmin && request.Action == "publish" && post.Status is BlogStatus.Draft or BlogStatus.ChangesRequested or BlogStatus.Rejected or BlogStatus.Submitted;
+        if (request.Action == "unpublish" && !IsAdmin) return Forbid();
+        var directPublish = IsAdmin && request.Action == "publish" && post.Status != BlogStatus.Published;
         if (IsAdmin && request.Action == "publish" && !request.Reviewed)
             return BadRequest(new { message = "Preview and review the saved article before publishing." });
-        var next = directPublish ? BlogStatus.Published : BlogWorkflow.Next(post.Status, request.Action);
+        BlogStatus? next = directPublish ? BlogStatus.Published
+            : IsAdmin && request.Action == "unpublish" && post.Status == BlogStatus.Published ? BlogStatus.Draft
+            : IsAdmin && request.Action == "archive" && post.Status != BlogStatus.Archived ? BlogStatus.Archived
+            : BlogWorkflow.Next(post.Status, request.Action);
         if (next is null) return Conflict(new { message = "That action is not allowed at the current stage." });
         if (request.Action is "request-changes" or "reject" && string.IsNullOrWhiteSpace(request.Note))
             return BadRequest(new { message = "Provide a review note for the writer." });

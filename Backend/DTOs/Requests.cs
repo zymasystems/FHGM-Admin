@@ -19,6 +19,6 @@ public sealed record BlogRequest(
     [MaxLength(180)] string SeoTitle = "",
     [MaxLength(320)] string SeoDescription = "",
     int Version = 1, [RegularExpression("PlainText|Markdown")] string ContentFormat = "PlainText",
-    [MaxLength(2000), SafeImageUrl] string FeaturedImageUrl = "");
+    [MaxLength(2000), SafeImageUrl] string FeaturedImageUrl = "", bool Reviewed = false);
 public sealed record TransitionRequest([Required] string Action, int Version, [MaxLength(2000)] string Note = "", bool Reviewed = false);
 
