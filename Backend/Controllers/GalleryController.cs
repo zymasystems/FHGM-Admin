@@ -70,11 +70,12 @@ public sealed class GalleryController(AppDbContext db, GalleryStorage storage, A
         return Ok(new { album.Id, album.Title, album.Slug, album.Description, album.IsPublished, album.Version });
     }
 
+    [HttpGet("images")]
     [HttpGet("albums/{id:guid}/images")]
-    public async Task<IActionResult> Images(Guid id, int page = 1)
+    public async Task<IActionResult> Images(Guid? id = null, int page = 1)
     {
         if (page < 1 || page > 10000) return BadRequest();
-        if (!await db.GalleryAlbums.AnyAsync(x => x.Id == id)) return NotFound();
+        if (id.HasValue && !await db.GalleryAlbums.AnyAsync(x => x.Id == id)) return NotFound();
         var query = db.GalleryImages.AsNoTracking().Where(x => x.AlbumId == id && !x.IsDeleted);
         var items = await query.OrderByDescending(x => x.CreatedAt).Skip((page - 1) * 24).Take(24)
             .Select(x => new { x.Id, x.FileName, x.AltText, x.Caption, x.Size, x.IsComplete, x.IsPublished, x.Version, x.StorageKey }).ToListAsync();
@@ -90,7 +91,7 @@ public sealed class GalleryController(AppDbContext db, GalleryStorage storage, A
         { "image/jpeg" => new[] { ".jpg", ".jpeg" }, "image/png" => [".png"], "image/webp" => [".webp"], _ => [] };
         if (!expectedExtension.Contains(Path.GetExtension(request.FileName).ToLowerInvariant()))
             return BadRequest(new { message = "Choose a JPEG, PNG or WebP image with a matching file extension." });
-        if (!await db.GalleryAlbums.AnyAsync(x => x.Id == request.AlbumId)) return NotFound();
+        if (request.AlbumId.HasValue && !await db.GalleryAlbums.AnyAsync(x => x.Id == request.AlbumId)) return NotFound();
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
         var recent = DateTimeOffset.UtcNow.AddHours(-1);
         if (await db.GalleryImages.CountAsync(x => x.UploadedBy == userId && !x.IsComplete && !x.IsDeleted && x.CreatedAt > recent) >= 20)

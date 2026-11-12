@@ -1,24 +1,26 @@
 (() => {
   'use strict';
   const el = id => document.getElementById(id);
-  let albums = [], selected = null, albumPage = 1, imagePage = 1, configured = false, search = "", imageItems = [], selectedIds = new Set(), queue = [], uploading = false;
+  const standalone = { id: null, title: 'Standalone photos', slug: '', description: '', isPublished: true };
+  let albums = [], selected = standalone, albumPage = 1, imagePage = 1, configured = false, search = "", imageItems = [], selectedIds = new Set(), queue = [], uploading = false;
   const form = el('album-form');
   const initialControls = [...form.elements, el('album-new'), el('album-select')];
   initialControls.forEach(control => { control.disabled = true; });
   function status(text) { el('gallery-upload-status').textContent = text; }
-  function clearAlbum() { selected = null; selectedIds.clear(); selectionStatus(); el('gallery-public-link').hidden = true; form.reset(); el('album-select').value = ''; el('album-form-title').textContent = 'New album'; el('gallery-upload').disabled = true; el('gallery-images').replaceChildren(); el('gallery-empty').hidden = false; el('gallery-images-title').textContent = 'Album photos'; }
+  function clearAlbum() { selected = null; form.hidden = false; selectedIds.clear(); selectionStatus(); el('gallery-public-link').hidden = true; form.reset(); el('album-select').value = ''; el('album-form-title').textContent = 'New album'; el('gallery-upload').disabled = true; el('gallery-images').replaceChildren(); el('gallery-empty').hidden = false; el('gallery-images-title').textContent = 'Album photos'; }
   async function loadAlbums(preferredId = selected?.id) {
     const data = await api('gallery/albums?page=' + albumPage + '&search=' + encodeURIComponent(search)); albums = data.items;
-    el('album-select').replaceChildren(new Option('Select an album', ''));
+    el('album-select').replaceChildren(new Option('Standalone photos (no album)', ''));
     for (const album of albums) el('album-select').append(new Option(album.title + (album.isPublished ? ' · Published' : ' · Draft'), album.id));
     el('albums-prev').disabled = albumPage <= 1; el('albums-next').disabled = albumPage * 50 >= data.total;
-    const album = albums.find(a => a.id === preferredId) || albums[0];
-    if (album) await selectAlbum(album.id); else clearAlbum();
+    await selectAlbum(albums.some(a => a.id === preferredId) ? preferredId : "");
   }
   async function selectAlbum(id) {
-    selected = albums.find(a => a.id === id);
+    selected = id ? albums.find(a => a.id === id) : standalone;
+    form.hidden = !id;
     if (!selected) { clearAlbum(); return; }
-    el('album-select').value = selected.id;
+    el('album-select').value = selected.id || '';
+    el('gallery-upload').textContent = selected.id ? 'Upload to this album' : 'Upload standalone photos';
     form.elements.title.value = selected.title; form.elements.slug.value = selected.slug; form.elements.description.value = selected.description;
     form.elements.isPublished.checked = selected.isPublished; el('album-form-title').textContent = 'Edit album';
     el('gallery-upload').disabled = !configured; imagePage = 1; await loadImages();
@@ -27,11 +29,12 @@
   async function loadImages() {
     if (!selected) return;
     el('gallery-images-title').textContent = selected.title;
-    el('gallery-public-link').hidden = !selected.isPublished; el('gallery-public-link').href = 'https://hisgraceministries.co.za/gallery.html?album=' + encodeURIComponent(selected.slug);
+    el('gallery-public-link').hidden = !selected.id || !selected.isPublished; el('gallery-public-link').href = 'https://hisgraceministries.co.za/gallery.html?album=' + encodeURIComponent(selected.slug);
     el('gallery-images-description').textContent = selected.isPublished ? 'Album published. Only published photos appear on the website.' : 'Album is a draft. Its photos are hidden from the website.';
-    const data = await api(`gallery/albums/${selected.id}/images?page=${imagePage}`);
+    if (!selected.id) el('gallery-images-description').textContent = 'Photos without an album. Publish each photo or use the bulk actions below.';
+    const data = await api((selected.id ? `gallery/albums/${selected.id}/images` : 'gallery/images') + `?page=${imagePage}`);
     imageItems = data.items; selectedIds.clear(); selectionStatus();
-    el('gallery-images-description').textContent += ` ${selected.unpublishedCount || 0} completed photos are still drafts; ${selected.pendingCount || 0} uploads are incomplete.`;
+    if (selected.id) el('gallery-images-description').textContent += ` ${selected.unpublishedCount || 0} completed photos are still drafts; ${selected.pendingCount || 0} uploads are incomplete.`;
     el('gallery-images').replaceChildren(); el('gallery-empty').hidden = data.total !== 0;
     el('images-page').textContent = `Page ${imagePage} · ${data.total} photos`; el('images-prev').disabled = imagePage <= 1; el('images-next').disabled = imagePage * 24 >= data.total;
     for (const image of data.items) {
@@ -50,7 +53,7 @@
         imageForm.append(makeLabel('Image description (alt text)', alt), makeLabel('Caption', caption), check, save);
         imageForm.addEventListener('submit', event => { event.preventDefault(); perform(save, async () => { await api('gallery/images/' + image.id, 'PUT', { altText: alt.value, caption: caption.value, isPublished: published.checked, version: image.version }); await loadAlbums(); notice('Photo saved.'); }); });
         content.append(imageForm);
-        if (image.isPublished) content.append(button(selected.coverImageId === image.id ? 'Current album cover' : 'Use as album cover', async () => {
+        if (image.isPublished && selected.id) content.append(button(selected.coverImageId === image.id ? 'Current album cover' : 'Use as album cover', async () => {
           await api('gallery/albums/' + selected.id, 'PUT', { ...selected, coverImageId: image.id }); await loadAlbums(); notice('Album cover updated.');
         }));
       } else {
@@ -139,18 +142,20 @@
   }
   el('gallery-upload-form').addEventListener('submit', event => {
     event.preventDefault(); perform(event.submitter, async () => {
-      if (!selected || !configured) throw new Error('Save an album and connect image storage before uploading.');
+      if (!selected || !configured) throw new Error('Choose standalone photos or save an album, and connect image storage before uploading.');
       const files = Array.from(el('gallery-files').files);
-      if (!files.length || files.length > 20) throw new Error('Choose 1–20 photos at a time.');
+      const limit = el('gallery-upload-mode').value === 'single' ? 1 : 20;
+      if (!files.length || files.length > limit) throw new Error(`Choose 1–${limit} photos for this upload mode.`);
       for (const file of files) if (!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size < 16 || file.size > 10485760) throw new Error(`${file.name}: choose a JPEG, PNG or WebP image up to 10 MB.`);
       if (queue.some(x => x.state.startsWith('Failed')) && !confirm('Replace the retry queue? Incomplete records can still be removed from the album.')) return;
       queue = files.map(file => ({ file, albumId: selected.id, state: 'Waiting', uploadId: null }));
       el('gallery-files').value = ''; await runQueue(queue);
     });
   });
+  el('gallery-upload-mode').addEventListener('change', () => { el('gallery-files').multiple = el('gallery-upload-mode').value === 'bulk'; el('gallery-files').value = ''; });
   const drop = el('gallery-upload-form');
   drop.addEventListener('dragover', event => { event.preventDefault(); });
-  drop.addEventListener('drop', event => { event.preventDefault(); if (!uploading && event.dataTransfer.files.length) { el('gallery-files').files = event.dataTransfer.files; status(`${event.dataTransfer.files.length} photos selected. Choose Upload to this album.`); } });
+  drop.addEventListener('drop', event => { event.preventDefault(); if (!uploading && event.dataTransfer.files.length) { el('gallery-files').files = event.dataTransfer.files; status(`${event.dataTransfer.files.length} photos selected. Choose the upload button to continue.`); } });
   el('gallery-refresh').addEventListener('click', () => perform(el('gallery-refresh'), () => loadAlbums()));
   for (const [id, offset] of [['images-prev',-1],['images-next',1]]) el(id).addEventListener('click', () => perform(el(id), async () => { imagePage += offset; await loadImages(); }));
   for (const [id, offset] of [['albums-prev',-1],['albums-next',1]]) el(id).addEventListener('click', () => perform(el(id), async () => { albumPage += offset; await loadAlbums(); }));

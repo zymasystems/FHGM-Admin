@@ -213,3 +213,11 @@ Gallery includes album search, drag-and-drop, per-photo progress/retry, selectio
 Password & security includes password changes and authenticator enrollment with one-use recovery codes. New staff must change their initial password before content API access. Forgotten-password links require configured SMTP. Existing accounts and content are preserved by the additive migration.
 
 See [operations setup](deploy/ops/README.md) for the deployment order, SMTP, backup/restore jobs, alert setup and R2 probe. These services need installation/configuration on the VPS; committing their code does not activate them.
+
+## Gallery and blog workflow update (12 November 2026)
+
+Gallery uploads offer Single image or Bulk images (up to 20 per batch). Choose **Standalone photos (no album)** or select/create an album. Standalone photos need only their own publication setting; album photos still require both album and image publication. Existing bulk select/publish/unpublish/remove actions work in either view. The public widget displays standalone photos in their own paginated Photos section using `GET /api/public/gallery/images`.
+
+ChurchAdmin and SuperAdmin can save an article, preview the saved version, and publish without submission/approval. Editing or saving invalidates the preview. Writer and BlogEditor workflows retain their existing permissions. Admins can permanently delete articles from the article list after confirmation; the API checks the current version and records the deletion in the audit log.
+
+Apply the new standalone-image migration with the normal backend `--initialize` deployment step before starting the updated applications. Existing albums and photos are preserved. Update the public gallery widget too; custom renderers on the separate website must consume `/api/public/gallery/images` to display standalone photos.

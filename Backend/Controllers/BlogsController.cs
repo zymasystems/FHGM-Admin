@@ -13,6 +13,7 @@ namespace FHGM.Backend.Controllers;
 [ApiController, Route("api/blog"), Authorize(Policy = Permissions.ManageBlogs)]
 public sealed class BlogsController(IBlogRepository blogs, UserManager<AppUser> users, AuditService audit) : ControllerBase
 {
+    private bool IsAdmin => User.IsInRole(Roles.SuperAdmin) || User.IsInRole(Roles.ChurchAdmin);
     private bool IsEditor => User.IsInRole(Roles.SuperAdmin) || User.IsInRole(Roles.ChurchAdmin) || User.IsInRole(Roles.BlogEditor);
     private string UserId => users.GetUserId(User)!;
 
@@ -68,7 +69,10 @@ public sealed class BlogsController(IBlogRepository blogs, UserManager<AppUser> 
         if (post is null || (!IsEditor && post.AuthorId != UserId)) return NotFound();
         if (!IsEditor && request.Action != "submit") return Forbid();
         if (post.Version != request.Version) return Conflict(new { message = "Reload this article; someone else changed it." });
-        var next = BlogWorkflow.Next(post.Status, request.Action);
+        var directPublish = IsAdmin && request.Action == "publish" && post.Status is BlogStatus.Draft or BlogStatus.ChangesRequested or BlogStatus.Rejected or BlogStatus.Submitted;
+        if (IsAdmin && request.Action == "publish" && !request.Reviewed)
+            return BadRequest(new { message = "Preview and review the saved article before publishing." });
+        var next = directPublish ? BlogStatus.Published : BlogWorkflow.Next(post.Status, request.Action);
         if (next is null) return Conflict(new { message = "That action is not allowed at the current stage." });
         if (request.Action is "request-changes" or "reject" && string.IsNullOrWhiteSpace(request.Note))
             return BadRequest(new { message = "Provide a review note for the writer." });
@@ -83,6 +87,18 @@ public sealed class BlogsController(IBlogRepository blogs, UserManager<AppUser> 
         audit.Record("Blog:" + request.Action, "BlogPost", post.Id.ToString());
         await blogs.SaveAsync();
         return Ok(post);
+    }
+
+    [HttpDelete("{id:guid}"), Authorize(Roles = Roles.SuperAdmin + "," + Roles.ChurchAdmin)]
+    public async Task<IActionResult> Delete(Guid id, int version)
+    {
+        var post = await blogs.FindAsync(id);
+        if (post is null) return NotFound();
+        if (post.Version != version) return Conflict(new { message = "Reload this article; someone else changed it." });
+        blogs.Remove(post);
+        audit.Record("BlogDeleted", "BlogPost", post.Id.ToString());
+        await blogs.SaveAsync();
+        return NoContent();
     }
 
     private static void Apply(BlogPost post, BlogRequest request)

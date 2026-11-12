@@ -34,6 +34,18 @@ const assert = require('node:assert/strict');
  await page.unroute('**/api/blog/*');
  await page.locator('#save-blog').click();
  await page.waitForFunction(() => document.querySelector('#blog-rows').textContent.includes('Browser article'));
+ await page.getByRole('button', {name:'Publish reviewed article', exact:true}).click();
+ await page.waitForFunction(() => document.querySelector('#editor-error').textContent.includes('Use Preview'));
+ await page.locator('#preview-blog').click();
+ page.once('dialog', dialog => dialog.accept());
+ await page.getByRole('button', {name:'Publish reviewed article', exact:true}).click();
+ await page.waitForFunction(() => document.querySelector('#editor-status').textContent.startsWith('Published'));
+ page.once('dialog', dialog => dialog.accept());
+ await page.locator('#close-editor').click();
+ const articleRow = page.locator('#blog-rows tr').filter({hasText:title});
+ page.once('dialog', dialog => dialog.accept());
+ await articleRow.getByRole('button', {name:'Delete', exact:true}).click();
+ await articleRow.waitFor({state:'detached'});
  await page.goto(base + '/admin/gallery');
  await page.waitForFunction(() => !document.querySelector('#album-new').disabled);
  await page.locator('#album-new').click();
@@ -57,6 +69,19 @@ const assert = require('node:assert/strict');
  await page.waitForFunction(() => document.querySelector('#gallery-images').textContent.includes('Published photo'));
  await page.getByRole('button',{name:'Use as album cover'}).click();
  await page.waitForFunction(() => document.querySelector('#gallery-images').textContent.includes('Current album cover'));
+ await page.locator('#album-select').selectOption('');
+ await page.waitForFunction(() => document.querySelector('#album-form').hidden);
+ assert.equal(await page.locator('#gallery-files').getAttribute('multiple'), null);
+ await page.locator('#gallery-upload-mode').selectOption('bulk');
+ assert.notEqual(await page.locator('#gallery-files').getAttribute('multiple'), null);
+ await page.locator('#gallery-files').setInputFiles([
+  {name:'single-a.png',mimeType:'image/png',buffer:png},
+  {name:'single-b.png',mimeType:'image/png',buffer:png}
+ ]);
+ await page.locator('#gallery-upload').click();
+ await page.waitForFunction(() => document.querySelectorAll('#gallery-images article').length === 2);
+ await page.locator('#select-photos').click(); await page.locator('#publish-photos').click();
+ await page.waitForFunction(() => Array.from(document.querySelectorAll('#gallery-images .badge')).every(x => x.textContent === 'Published photo'));
  await page.goto(base + '/account/security');
  await page.waitForFunction(() => document.querySelector('#security-status').textContent.includes('Authenticator'));
  await browser.close();

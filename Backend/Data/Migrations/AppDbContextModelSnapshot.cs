@@ -296,7 +296,7 @@ namespace FHGM.Backend.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("AlbumId")
+                    b.Property<Guid?>("AlbumId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("AltText")
@@ -621,8 +621,7 @@ namespace FHGM.Backend.Data.Migrations
                     b.HasOne("FHGM.Backend.Entities.GalleryAlbum", "Album")
                         .WithMany("Images")
                         .HasForeignKey("AlbumId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Album");
                 });
