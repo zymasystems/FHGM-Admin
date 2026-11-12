@@ -4,10 +4,20 @@
   const standalone = { id: null, title: 'Standalone photos', slug: '', description: '', isPublished: true };
   let albums = [], selected = standalone, albumPage = 1, imagePage = 1, configured = false, search = "", imageItems = [], selectedIds = new Set(), queue = [], uploading = false;
   const form = el('album-form');
-  const initialControls = [...form.elements, el('album-new'), el('album-select')];
+  const uploadForm = el('gallery-upload-form');
+  const uploadMode = () => uploadForm.elements.uploadMode.value;
+  function uploadLabels() {
+    const bulk = uploadMode() === 'bulk';
+    el('gallery-files').multiple = bulk;
+    el('gallery-upload').textContent = bulk ? 'Upload selected images' : 'Upload single image';
+    el('upload-destination').textContent = selected ? 'Uploading to: ' + selected.title : 'Create or choose an album before uploading.';
+    uploadForm.elements.destination.value = selected?.id || !selected ? 'album' : 'standalone';
+  }
+
+  const initialControls = [...form.elements, el('album-new'), el('album-select'), ...uploadForm.elements.destination];
   initialControls.forEach(control => { control.disabled = true; });
   function status(text) { el('gallery-upload-status').textContent = text; }
-  function clearAlbum() { selected = null; form.hidden = false; selectedIds.clear(); selectionStatus(); el('gallery-public-link').hidden = true; form.reset(); el('album-select').value = ''; el('album-form-title').textContent = 'New album'; el('gallery-upload').disabled = true; el('gallery-images').replaceChildren(); el('gallery-empty').hidden = false; el('gallery-images-title').textContent = 'Album photos'; }
+  function clearAlbum() { selected = null; uploadLabels(); form.hidden = false; selectedIds.clear(); selectionStatus(); el('gallery-public-link').hidden = true; form.reset(); el('album-select').value = ''; el('album-form-title').textContent = 'New album'; el('gallery-upload').disabled = true; el('gallery-images').replaceChildren(); el('gallery-empty').hidden = false; el('gallery-images-title').textContent = 'Album photos'; }
   async function loadAlbums(preferredId = selected?.id) {
     const data = await api('gallery/albums?page=' + albumPage + '&search=' + encodeURIComponent(search)); albums = data.items;
     el('album-select').replaceChildren(new Option('Standalone photos (no album)', ''));
@@ -20,7 +30,7 @@
     form.hidden = !id;
     if (!selected) { clearAlbum(); return; }
     el('album-select').value = selected.id || '';
-    el('gallery-upload').textContent = selected.id ? 'Upload to this album' : 'Upload standalone photos';
+    uploadLabels();
     form.elements.title.value = selected.title; form.elements.slug.value = selected.slug; form.elements.description.value = selected.description;
     form.elements.isPublished.checked = selected.isPublished; el('album-form-title').textContent = 'Edit album';
     el('gallery-upload').disabled = !configured; imagePage = 1; await loadImages();
@@ -144,7 +154,7 @@
     event.preventDefault(); perform(event.submitter, async () => {
       if (!selected || !configured) throw new Error('Choose standalone photos or save an album, and connect image storage before uploading.');
       const files = Array.from(el('gallery-files').files);
-      const limit = el('gallery-upload-mode').value === 'single' ? 1 : 20;
+      const limit = uploadMode() === 'single' ? 1 : 20;
       if (!files.length || files.length > limit) throw new Error(`Choose 1–${limit} photos for this upload mode.`);
       for (const file of files) if (!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size < 16 || file.size > 10485760) throw new Error(`${file.name}: choose a JPEG, PNG or WebP image up to 10 MB.`);
       if (queue.some(x => x.state.startsWith('Failed')) && !confirm('Replace the retry queue? Incomplete records can still be removed from the album.')) return;
@@ -152,7 +162,12 @@
       el('gallery-files').value = ''; await runQueue(queue);
     });
   });
-  el('gallery-upload-mode').addEventListener('change', () => { el('gallery-files').multiple = el('gallery-upload-mode').value === 'bulk'; el('gallery-files').value = ''; });
+  for (const radio of uploadForm.elements.uploadMode) radio.addEventListener('change', () => { uploadLabels(); el('gallery-files').value = ''; });
+  for (const radio of uploadForm.elements.destination) radio.addEventListener('change', () => perform(radio, async () => {
+    if (radio.value === 'standalone') await selectAlbum('');
+    else if (albums.length) await selectAlbum(albums[0].id);
+    else { clearAlbum(); form.elements.title.focus(); }
+  }));
   const drop = el('gallery-upload-form');
   drop.addEventListener('dragover', event => { event.preventDefault(); });
   drop.addEventListener('drop', event => { event.preventDefault(); if (!uploading && event.dataTransfer.files.length) { el('gallery-files').files = event.dataTransfer.files; status(`${event.dataTransfer.files.length} photos selected. Choose the upload button to continue.`); } });

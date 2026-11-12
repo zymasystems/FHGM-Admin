@@ -37,12 +37,14 @@ async function perform(target, action) { target.disabled = true; try { await act
 function pagination(prefix, data, size) { $(prefix + '-page').textContent = `Page ${data.page} · ${data.total} records`; $(prefix + '-prev').disabled = data.page <= 1; $(prefix + '-next').disabled = data.page * size >= data.total; }
 async function loadView() {
   if (activeView === 'blogs') {
+    $('blog-workflow-summary').textContent = isBlogAdmin() ? 'Save → Preview → Publish' : 'Draft → Review → Publish';
+    $('blog-workflow-help').textContent = isBlogAdmin() ? 'Save your article, preview it, then publish. No separate approval is needed. Use Edit article or Delete blog beside each article.' : 'Open an article to write or review it. Writers submit drafts for review.';
     const data = await api('blog?page=' + pages.blogs); $('blog-total').textContent = data.total; $('blog-rows').replaceChildren(); $('blog-empty').hidden = data.total !== 0;
     for (const post of data.items) {
       const tr = document.createElement('tr'); cell(tr, post.title);
       const badge = document.createElement('span'); badge.className = 'badge ' + post.status; badge.textContent = label(post.status); cell(tr, '').append(badge);
-      cell(tr, post.author); cell(tr, date(post.updatedAt)); const actions = cell(tr, ''); actions.append(button('Open →', () => openEditor(post.id)));
-      if (isBlogAdmin()) actions.append(button('Delete', async () => { if (!confirm(`Permanently delete “${post.title}”? This also removes it from the public website.`)) return; await api('blog/' + post.id + '?version=' + post.version, 'DELETE'); await loadView(); notice('Article deleted.'); }));
+      cell(tr, post.author); cell(tr, date(post.updatedAt)); const actions = cell(tr, ''); actions.className = 'blog-actions'; actions.append(button('Edit article', () => openEditor(post.id)));
+      if (isBlogAdmin()) actions.append(button('Delete blog', async () => { if (!confirm(`Permanently delete “${post.title}”? This also removes it from the public website.`)) return; await api('blog/' + post.id + '?version=' + post.version, 'DELETE'); await loadView(); notice('Article deleted.'); }));
       if (post.status === 'Published') { const view = document.createElement('a'); view.href = 'https://hisgraceministries.co.za/blog-post.html?slug=' + encodeURIComponent(post.slug); view.target = '_blank'; view.rel = 'noopener'; view.textContent = ' View on website'; actions.append(view); } $('blog-rows').append(tr);
     }
     pagination('blog', data, 25);
@@ -67,6 +69,7 @@ async function openEditor(id) {
   current = id ? await api('blog/' + id) : null;
   $('blog-form').reset(); $('editor-error').textContent = '';
   for (const key of fields) $('blog-form').elements[key].value = current?.[key] || (key === 'contentFormat' ? 'PlainText' : '');
+  $('delete-current-blog').hidden = !current || !isBlogAdmin();
   $('editor-heading').textContent = current ? 'Edit article' : 'New article';
   $('editor-status').textContent = current ? label(current.status) + ' · Version ' + current.version : 'Draft · Your changes will be saved when you select Save draft.';
   $('review-note').hidden = !current?.reviewNote; $('review-note').textContent = current?.reviewNote || '';
@@ -98,6 +101,13 @@ $('login-form')?.addEventListener('submit', async event => {
   try { await token(); me = await api('auth/login', 'POST', Object.fromEntries(new FormData(event.target))); location.assign(me.mustChangePassword ? '/account/security' : event.target.dataset.returnUrl || '/admin/'); } catch (error) { $('login-error').textContent = error.message; } finally { submit.disabled = false; }
 });
 $('logout')?.addEventListener('click', () => perform($('logout'), async () => { await api('auth/logout','POST',{}); me = null; showLogin(); }));
+$('delete-current-blog')?.addEventListener('click', () => perform($('delete-current-blog'), async () => {
+  if (savingBlog) throw new Error('Wait for the draft to finish saving.');
+  if (!current || !confirm(`Permanently delete “${current.title}”? This also removes it from the public website.`)) return;
+  clearTimeout(autosaveTimer);
+  await api('blog/' + current.id + '?version=' + current.version, 'DELETE');
+  editorGeneration++; current = null; $('editor').close(); await loadView(); notice('Article deleted.');
+}));
 $('new-blog')?.addEventListener('click', () => perform($('new-blog'), () => openEditor()));
 $('close-editor')?.addEventListener('click', () => { if (confirm('Close the editor? Unsaved changes will be lost.')) $('editor').close(); });
 $('editor')?.addEventListener('cancel', event => { if (!confirm('Close the editor? Unsaved changes will be lost.')) event.preventDefault(); });
