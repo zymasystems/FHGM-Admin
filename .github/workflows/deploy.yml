@@ -68,7 +68,8 @@ jobs:
           docker compose --env-file .env -f deploy/docker-compose.yml config --quiet
           docker compose --env-file .env -f deploy/docker-compose.yml build
           docker compose --env-file .env -f deploy/docker-compose.yml up -d db
-          docker compose --env-file .env -f deploy/docker-compose.yml run --rm backend --initialize
+          # Do not let Compose consume the remaining SSH bash script from stdin.
+          docker compose --env-file .env -f deploy/docker-compose.yml run --rm -T backend --initialize </dev/null
           docker compose --env-file .env -f deploy/docker-compose.yml up -d
 
           for attempt in {1..30}; do
@@ -77,6 +78,7 @@ jobs:
               version=$(curl -fsS --max-time 20 https://admin.hisgraceministries.co.za/health/version)
               echo "$version" | grep -F -- "\"revision\":\"$2\""
               curl -fsS --max-time 20 https://admin.hisgraceministries.co.za/admin/gallery.js | grep -F 'optional-album-previews-v2'
+              echo "FHGM_DEPLOY_VERIFIED=$2"
               exit 0
             fi
             sleep 2

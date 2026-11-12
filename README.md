@@ -239,3 +239,9 @@ The nullable `GalleryImage.AlbumId`, optional upload DTO, migration `20261112100
 **Investigated deployment mismatch:** Compose publishes MVC at `127.0.0.1:5081`, while the earlier supplied Nginx examples still targeted `5080`. Updated examples now target `5081`. Check and reload the installed admin/public Nginx vhosts accordingly; repository template edits do not rewrite installed VPS configurations. An old process on 5080 can otherwise continue serving the old UI even after a successful container deployment. This is a repository-confirmed mismatch, not confirmation of the VPS's currently installed configuration.
 
 The deployment workflow sets `FHGM_RELEASE_SHA`, checks the running frontend through HTTPS `/health/version`, and verifies the gallery JavaScript marker before reporting success. The frontend also sends `X-FHGM-Release`. A public-vhost mismatch now fails deployment verification rather than passing on local readiness alone. Local Visual Studio MVC still uses port 5080; Compose/Nginx production examples use 5081.
+
+## Streamed SSH deployment fix
+
+The deployment run for merge `91adc4e` stopped after `backend --initialize`, before `up -d`, health checks or public release verification, while reporting success. `docker compose run` inherited stdin from `ssh ... bash -s` and could consume the remaining remote script. Initialization now uses `-T` and redirects stdin from `/dev/null`, so the remote shell executes the frontend restart and release checks. The workflow prints `FHGM_DEPLOY_VERIFIED=<commit>` only after all checks pass.
+
+`Tests/deploy_stream_test.py` reproduces the previous false success using command shims, verifies that the fixed streamed script reaches frontend startup and public gallery checks, and confirms that a stale public release fails deployment. It runs in CI without connecting to the VPS or mutating client data.
