@@ -95,9 +95,10 @@ const assert = require('node:assert/strict');
  const albumId = await page.locator('#album-select').inputValue();
  const uploads = []; page.on('request', request => { if (request.url().endsWith('/api/gallery/uploads') && request.method() === 'POST') uploads.push(request.postDataJSON()); });
  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');
- let fail = true, activePuts = 0, peakPuts = 0;
+ let fail = true, failNextBulk = false, activePuts = 0, peakPuts = 0;
  await page.route('http://127.0.0.1:9002/**', async route => {
   if (route.request().method() === 'PUT' && fail) { fail = false; await route.abort('failed'); }
+  else if (route.request().method() === 'PUT' && failNextBulk) { failNextBulk = false; await route.abort('failed'); }
   else if (route.request().method() === 'PUT') { activePuts++; peakPuts = Math.max(peakPuts, activePuts); await new Promise(resolve => setTimeout(resolve, 500)); await route.continue(); activePuts--; }
   else await route.continue();
  });
@@ -117,8 +118,10 @@ const assert = require('node:assert/strict');
  await page.getByRole('button',{name:'Use as album cover'}).click();
  await page.waitForFunction(() => document.querySelector('#gallery-images').textContent.includes('Current album cover'));
  // Bulk upload with an album: both files must keep the chosen album ID.
- await page.locator('[name=uploadMode][value=bulk]').check();
- await page.locator('#gallery-files').setInputFiles([
+ const fileChooserPromise = page.waitForEvent('filechooser');
+ await page.getByRole('button',{name:'Bulk Upload',exact:true}).click();
+ const chooser = await fileChooserPromise; assert.equal(chooser.isMultiple(), true);
+ await chooser.setFiles([
   {name:'album-a.png',mimeType:'image/png',buffer:png},
   {name:'album-b.png',mimeType:'image/png',buffer:png},
   {name:'album-discard.png',mimeType:'image/png',buffer:png}
@@ -127,8 +130,20 @@ const assert = require('node:assert/strict');
  await page.getByRole('button',{name:'Remove album-discard.png',exact:true}).click();
  assert.equal(await page.locator('#gallery-file-previews article').count(), 2);
  await page.screenshot({path:'test-results/gallery-bulk-selection.png',fullPage:true});
+ failNextBulk = true;
  await page.locator('#gallery-upload').click();
- await page.waitForFunction(() => document.querySelectorAll('#gallery-images article').length === 3);
+ await page.waitForFunction(() => document.querySelector('#gallery-upload-status').textContent.includes('1 uploaded successfully; 1 failed'));
+ const beforeRetry = await page.request.get(base + '/api/gallery/albums/' + albumId + '/images');
+ const completedBeforeRetry = (await beforeRetry.json()).items.filter(item => item.isComplete).map(item => item.id);
+ assert.equal(completedBeforeRetry.length, 2); // Original image plus the successful batch image.
+ const authorizationsBeforeRetry = uploads.length;
+ await page.getByRole('button',{name:'Retry photo',exact:true}).click();
+ await page.waitForFunction(() => document.querySelectorAll('#gallery-images article').length === 3 && document.querySelector('#gallery-upload-status').textContent.includes('2 uploaded successfully'));
+ assert.equal(uploads.length, authorizationsBeforeRetry); // Retry reuses the failed record.
+ const afterRetry = await page.request.get(base + '/api/gallery/albums/' + albumId + '/images');
+ const completedAfterRetry = (await afterRetry.json()).items.filter(item => item.isComplete).map(item => item.id);
+ assert.equal(completedAfterRetry.length, 3);
+ assert.ok(completedBeforeRetry.every(id => completedAfterRetry.includes(id)));
  assert.deepEqual(uploads.slice(-2).map(x => x.albumId), [albumId,albumId]);
  assert.ok(!uploads.some(x => x.fileName === 'album-discard.png'));
  await page.locator('#album-select').selectOption('');
