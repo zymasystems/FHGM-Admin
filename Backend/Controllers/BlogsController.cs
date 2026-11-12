@@ -45,7 +45,7 @@ public sealed class BlogsController(IBlogRepository blogs, UserManager<AppUser> 
         blogs.Add(post);
         audit.Record("BlogCreated", "BlogPost", post.Id.ToString());
         await blogs.SaveAsync();
-        return CreatedAtAction(nameof(Get), new { id = post.Id }, await StaffPost(post));
+        return CreatedAtAction(nameof(Get), new { id = post.Id }, post);
     }
 
     [HttpPut("{id:guid}")]
