@@ -53,8 +53,8 @@ const assert = require('node:assert/strict');
  await page.waitForFunction(() => !document.querySelector('#album-new').disabled);
  await page.getByText('Single image', {exact:true}).waitFor({state:'visible'});
  await page.getByText('Bulk images', {exact:true}).waitFor({state:'visible'});
- await page.getByText('Without an album', {exact:true}).waitFor({state:'visible'});
- await page.locator('[name=destination][value=album]').check();
+ await page.getByText('2. Album (optional)', {exact:true}).waitFor({state:'visible'});
+ assert.equal(await page.locator('#album-select').inputValue(), '');
  await page.locator('#album-new').click();
  await page.locator('#album-form [name=title]').fill('Browser gallery');
  await page.locator('#album-form [name=slug]').fill('browser-gallery-' + Date.now());
@@ -76,9 +76,22 @@ const assert = require('node:assert/strict');
  await page.waitForFunction(() => document.querySelector('#gallery-images').textContent.includes('Published photo'));
  await page.getByRole('button',{name:'Use as album cover'}).click();
  await page.waitForFunction(() => document.querySelector('#gallery-images').textContent.includes('Current album cover'));
- await page.locator('[name=destination][value=standalone]').check();
+ // Bulk upload with an album: both files must keep the chosen album ID.
+ await page.locator('[name=uploadMode][value=bulk]').check();
+ await page.locator('#gallery-files').setInputFiles([
+  {name:'album-a.png',mimeType:'image/png',buffer:png},
+  {name:'album-b.png',mimeType:'image/png',buffer:png}
+ ]);
+ await page.locator('#gallery-upload').click();
+ await page.waitForFunction(() => document.querySelectorAll('#gallery-images article').length === 3);
+ await page.locator('#album-select').selectOption('');
  await page.waitForFunction(() => document.querySelector('#album-form').hidden);
+ await page.locator('[name=uploadMode][value=single]').check();
  assert.equal(await page.locator('#gallery-files').getAttribute('multiple'), null);
+ // A single image succeeds with no album selected.
+ await page.locator('#gallery-files').setInputFiles({name:'standalone-single.png',mimeType:'image/png',buffer:png});
+ await page.locator('#gallery-upload').click();
+ await page.waitForFunction(() => document.querySelectorAll('#gallery-images article').length === 1);
  await page.locator('[name=uploadMode][value=bulk]').check();
  assert.notEqual(await page.locator('#gallery-files').getAttribute('multiple'), null);
  await page.locator('#gallery-files').setInputFiles([
@@ -86,7 +99,7 @@ const assert = require('node:assert/strict');
   {name:'single-b.png',mimeType:'image/png',buffer:png}
  ]);
  await page.locator('#gallery-upload').click();
- await page.waitForFunction(() => document.querySelectorAll('#gallery-images article').length === 2);
+ await page.waitForFunction(() => document.querySelectorAll('#gallery-images article').length === 3);
  await page.locator('#select-photos').click(); await page.locator('#publish-photos').click();
  await page.waitForFunction(() => Array.from(document.querySelectorAll('#gallery-images .badge')).every(x => x.textContent === 'Published photo'));
  await page.goto(base + '/account/security');

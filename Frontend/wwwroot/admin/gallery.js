@@ -11,16 +11,15 @@
     el('gallery-files').multiple = bulk;
     el('gallery-upload').textContent = bulk ? 'Upload selected images' : 'Upload single image';
     el('upload-destination').textContent = selected ? 'Uploading to: ' + selected.title : 'Create or choose an album before uploading.';
-    uploadForm.elements.destination.value = selected?.id || !selected ? 'album' : 'standalone';
   }
 
-  const initialControls = [...form.elements, el('album-new'), el('album-select'), ...uploadForm.elements.destination];
+  const initialControls = [...form.elements, el('album-new'), el('album-select')];
   initialControls.forEach(control => { control.disabled = true; });
   function status(text) { el('gallery-upload-status').textContent = text; }
-  function clearAlbum() { selected = null; uploadLabels(); form.hidden = false; selectedIds.clear(); selectionStatus(); el('gallery-public-link').hidden = true; form.reset(); el('album-select').value = ''; el('album-form-title').textContent = 'New album'; el('gallery-upload').disabled = true; el('gallery-images').replaceChildren(); el('gallery-empty').hidden = false; el('gallery-images-title').textContent = 'Album photos'; }
+  async function clearAlbum() { selected = standalone; uploadLabels(); form.hidden = false; form.reset(); el('album-select').value = ''; el('album-form-title').textContent = 'New album'; el('gallery-upload').disabled = !configured || uploading; await loadImages(); }
   async function loadAlbums(preferredId = selected?.id) {
     const data = await api('gallery/albums?page=' + albumPage + '&search=' + encodeURIComponent(search)); albums = data.items;
-    el('album-select').replaceChildren(new Option('Standalone photos (no album)', ''));
+    el('album-select').replaceChildren(new Option('No album — standalone gallery photos', ''));
     for (const album of albums) el('album-select').append(new Option(album.title + (album.isPublished ? ' · Published' : ' · Draft'), album.id));
     el('albums-prev').disabled = albumPage <= 1; el('albums-next').disabled = albumPage * 50 >= data.total;
     await selectAlbum(albums.some(a => a.id === preferredId) ? preferredId : "");
@@ -28,12 +27,12 @@
   async function selectAlbum(id) {
     selected = id ? albums.find(a => a.id === id) : standalone;
     form.hidden = !id;
-    if (!selected) { clearAlbum(); return; }
+    if (!selected) { await clearAlbum(); return; }
     el('album-select').value = selected.id || '';
     uploadLabels();
     form.elements.title.value = selected.title; form.elements.slug.value = selected.slug; form.elements.description.value = selected.description;
     form.elements.isPublished.checked = selected.isPublished; el('album-form-title').textContent = 'Edit album';
-    el('gallery-upload').disabled = !configured; imagePage = 1; await loadImages();
+    el('gallery-upload').disabled = !configured || uploading; imagePage = 1; await loadImages();
   }
   function makeLabel(title, control) { const label = document.createElement('label'); label.className = 'mb-3'; label.textContent = title; label.append(control); return label; }
   async function loadImages() {
@@ -84,12 +83,12 @@
       request.send(file);
     });
   }
-  el('album-new').addEventListener('click', clearAlbum);
+  el('album-new').addEventListener('click', () => perform(el('album-new'), clearAlbum));
   el('album-select').addEventListener('change', event => perform(el('album-select'), () => selectAlbum(event.target.value)));
   form.addEventListener('submit', event => {
     event.preventDefault(); perform(event.submitter, async () => {
       const body = { title: form.elements.title.value, slug: form.elements.slug.value, description: form.elements.description.value, isPublished: form.elements.isPublished.checked, version: selected?.version || 1, coverImageId: selected?.coverImageId || null };
-      const result = await api(selected ? 'gallery/albums/' + selected.id : 'gallery/albums', selected ? 'PUT' : 'POST', body);
+      const result = await api(selected?.id ? 'gallery/albums/' + selected.id : 'gallery/albums', selected?.id ? 'PUT' : 'POST', body);
       await loadAlbums(result.id); notice(result.isPublished ? 'Album saved and published.' : 'Album saved as a draft.');
     });
   });
@@ -163,11 +162,6 @@
     });
   });
   for (const radio of uploadForm.elements.uploadMode) radio.addEventListener('change', () => { uploadLabels(); el('gallery-files').value = ''; });
-  for (const radio of uploadForm.elements.destination) radio.addEventListener('change', () => perform(radio, async () => {
-    if (radio.value === 'standalone') await selectAlbum('');
-    else if (albums.length) await selectAlbum(albums[0].id);
-    else { clearAlbum(); form.elements.title.focus(); }
-  }));
   const drop = el('gallery-upload-form');
   drop.addEventListener('dragover', event => { event.preventDefault(); });
   drop.addEventListener('drop', event => { event.preventDefault(); if (!uploading && event.dataTransfer.files.length) { el('gallery-files').files = event.dataTransfer.files; status(`${event.dataTransfer.files.length} photos selected. Choose the upload button to continue.`); } });
