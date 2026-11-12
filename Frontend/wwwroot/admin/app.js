@@ -1,12 +1,13 @@
 'use strict';
 const $ = id => document.getElementById(id);
-let editorGeneration = 0, blogRevision = 0, reviewedVersion = null;
+let editorGeneration = 0, blogRevision = 0, reviewedVersion = null, reviewedSnapshot = null, previewPayload = null;
 const isBlogAdmin = () => me.roles.some(r => ["SuperAdmin", "ChurchAdmin"].includes(r));
 let savingBlog = false, autosaveTimer = null, autosaveBlocked = false;
 let csrf = '', me = null, current = null, activeView = document.body.dataset.view || 'overview';
 const pages = { blogs: 1, users: 1, audit: 1 };
 const isEditor = () => me.roles.some(r => ['SuperAdmin', 'ChurchAdmin', 'BlogEditor'].includes(r));
 const isBlogTeam = () => me.roles.some(r => ['SuperAdmin', 'ChurchAdmin', 'BlogEditor', 'Writer'].includes(r));
+const blogStatus = value => value === 'Submitted' ? 'Pending Review' : label(value);
 const date = value => value ? new Date(value).toLocaleString() : '—';
 const label = value => value === 'SuperAdmin' ? 'Developer Super Admin' : value.replace(/([a-z])([A-Z])/g, '$1 $2');
 function notice(message, error = false) { $('notice').textContent = message; $('notice').className = error ? 'error' : ''; }
@@ -42,9 +43,16 @@ async function loadView() {
     const data = await api('blog?page=' + pages.blogs); $('blog-total').textContent = data.total; $('blog-rows').replaceChildren(); $('blog-empty').hidden = data.total !== 0;
     for (const post of data.items) {
       const tr = document.createElement('tr'); cell(tr, post.title);
-      const badge = document.createElement('span'); badge.className = 'badge ' + post.status; badge.textContent = label(post.status); cell(tr, '').append(badge);
-      cell(tr, post.author); cell(tr, date(post.updatedAt)); const actions = cell(tr, ''); actions.className = 'blog-actions'; actions.append(button('Edit article', () => openEditor(post.id)));
-      if (isBlogAdmin()) actions.append(button('Delete blog', async () => { if (!confirm(`Permanently delete “${post.title}”? This also removes it from the public website.`)) return; await api('blog/' + post.id + '?version=' + post.version, 'DELETE'); await loadView(); notice('Article deleted.'); }));
+      const badge = document.createElement('span'); badge.className = 'badge ' + post.status; badge.textContent = blogStatus(post.status); cell(tr, '').append(badge);
+      cell(tr, post.author); cell(tr, date(post.updatedAt)); const actions = cell(tr, ''); actions.className = 'blog-actions';
+      actions.append(button('Preview', async () => { await openEditor(post.id); showBlogPreview(); }), button('Edit article', () => openEditor(post.id)));
+      if (isBlogAdmin()) {
+        if (post.status !== 'Published') actions.append(button('Publish', async () => { await openEditor(post.id); showBlogPreview(); $('editor-error').textContent = 'Review the website preview, then choose Publish reviewed article below.'; }));
+        if (post.status === 'Published') actions.append(button('Unpublish', () => listTransition(post, 'unpublish')));
+        if (post.status !== 'Archived') actions.append(button('Archive', () => listTransition(post, 'archive')));
+        const remove = button('Delete blog', async () => { if (!confirm(`Permanently delete “${post.title}”? This cannot be undone and removes it from the website.`)) return; await api('blog/' + post.id + '?version=' + post.version, 'DELETE'); await loadView(); notice('Article deleted.'); });
+        remove.classList.add('blog-delete'); actions.append(remove);
+      }
       if (post.status === 'Published') { const view = document.createElement('a'); view.href = 'https://hisgraceministries.co.za/blog-post.html?slug=' + encodeURIComponent(post.slug); view.target = '_blank'; view.rel = 'noopener'; view.textContent = ' View on website'; actions.append(view); } $('blog-rows').append(tr);
     }
     pagination('blog', data, 25);
@@ -62,23 +70,34 @@ async function loadView() {
     pagination('audit', data, 50);
   }
 }
+async function listTransition(post, action) {
+  if (!confirm(`${action === 'unpublish' ? 'Unpublish' : 'Archive'} “${post.title}”? It will no longer appear on the public website.`)) return;
+  await api('blog/' + post.id + '/workflow', 'POST', {action, version:post.version});
+  await loadView(); notice(action === 'unpublish' ? 'Article unpublished and saved as a draft.' : 'Article archived.');
+}
 const fields = ['title','slug','excerpt','content','category','tags','seoTitle','seoDescription','contentFormat','featuredImageUrl'];
 async function openEditor(id) {
-  editorGeneration++; blogRevision = 0; reviewedVersion = null;
+  editorGeneration++; blogRevision = 0; reviewedVersion = null; reviewedSnapshot = null; previewPayload = null;
   clearTimeout(autosaveTimer); autosaveBlocked = false; $('article-preview').hidden = true;
   current = id ? await api('blog/' + id) : null;
   $('blog-form').reset(); $('editor-error').textContent = '';
   for (const key of fields) $('blog-form').elements[key].value = current?.[key] || (key === 'contentFormat' ? 'PlainText' : '');
   $('delete-current-blog').hidden = !current || !isBlogAdmin();
   $('editor-heading').textContent = current ? 'Edit article' : 'New article';
-  $('editor-status').textContent = current ? label(current.status) + ' · Version ' + current.version : 'Draft · Your changes will be saved when you select Save draft.';
+  $('editor-status').textContent = current ? blogStatus(current.status) + ' · Version ' + current.version : 'Draft · Your changes will be saved when you select Save draft.';
   $('review-note').hidden = !current?.reviewNote; $('review-note').textContent = current?.reviewNote || '';
-  const editable = !current || (['Draft','ChangesRequested','Rejected','Submitted'].includes(current.status) && (isEditor() || current.status !== 'Submitted'));
+  const editable = !current || isBlogAdmin() || (['Draft','ChangesRequested','Rejected','Submitted'].includes(current.status) && (isEditor() || current.status !== 'Submitted'));
   for (const key of fields) $('blog-form').elements[key].disabled = !editable;
-  $('save-blog').hidden = !editable; $('save-blog').textContent = current ? 'Save changes' : 'Save draft'; $('workflow').replaceChildren();
+  $('save-blog').hidden = !editable; $('save-blog').textContent = current?.status === 'Published' ? 'Save published changes' : current ? 'Save changes' : 'Save draft';
+  $('blog-save-help').textContent = current?.status === 'Published' ? 'Preview your changes, then save explicitly to update the live website. Published posts do not autosave.' : 'Save your changes, preview the article, then choose a publishing action.'; $('workflow').replaceChildren();
   if (current) {
     const actions = { Draft:[['submit','Submit for review']], ChangesRequested:[['submit','Resubmit for review']], Rejected:[['submit','Resubmit for review']], Submitted:[['request-changes','Request changes'],['reject','Reject'],['approve','Approve article']], Approved:[['publish','Publish article'],['archive','Archive']], Published:[['archive','Archive / unpublish']], Archived:[['restore','Restore to draft']] };
     if (isBlogAdmin() && ['Draft','ChangesRequested','Rejected','Submitted'].includes(current.status)) actions[current.status] = [...(current.status === 'Submitted' ? [['request-changes','Request changes'],['reject','Reject']] : []), ['publish', 'Publish reviewed article']];
+    if (isBlogAdmin()) {
+      if (current.status === 'Published') actions.Published = [['unpublish','Unpublish'],['archive','Archive']];
+      if (current.status === 'Approved') actions.Approved = [['publish','Publish reviewed article'],['archive','Archive']];
+      if (current.status === 'Archived') actions.Archived = [['restore','Restore to draft'],['publish','Publish reviewed article']];
+    }
     for (const [action, text] of actions[current.status] || []) {
       if (!isEditor() && action !== 'submit') continue;
       $('workflow').append(button(text, async () => {
@@ -89,6 +108,7 @@ async function openEditor(id) {
         let note = '';
         if (['request-changes','reject'].includes(action)) { note = prompt('Add a review note for the writer:'); if (note === null) return; }
         if (action === 'publish' && isBlogAdmin() && reviewedVersion !== current.version) { $('editor-error').textContent = 'Use Preview to review the saved article before publishing.'; return; }
+        if (['unpublish','archive'].includes(action) && !confirm('Remove this article from the public website?')) return;
         if (action === 'publish' && !confirm('Publish this article on the public website?')) return;
         try { await api('blog/' + current.id + '/workflow', 'POST', { action, version: current.version, note, reviewed: reviewedVersion === current.version }); const articleId = current.id; await openEditor(articleId); await loadView(); } catch (error) { $('editor-error').textContent = error.message; }
       }));
@@ -114,13 +134,19 @@ $('editor')?.addEventListener('cancel', event => { if (!confirm('Close the edito
 async function saveBlog(automatic = false) {
   const form = $('blog-form');
   if (savingBlog || form.elements.title.disabled || !form.checkValidity() || automatic && autosaveBlocked) return;
+  if (current?.status === 'Published') {
+    if (automatic) return;
+    if (reviewedSnapshot !== blogSnapshot()) { $('editor-error').textContent = 'Preview the updated article before saving changes to the live website.'; return; }
+    if (!confirm('Save these reviewed changes to the published article? They will appear on the live website immediately.')) return;
+  }
   const generation = editorGeneration, revision = blogRevision;
   savingBlog = true; $('save-blog').disabled = true; $('editor-error').textContent = '';
   try {
-    const body = Object.fromEntries(new FormData(form)); body.version = current?.version || 1;
+    const body = Object.fromEntries(new FormData(form)); body.version = current?.version || 1; body.reviewed = reviewedSnapshot === blogSnapshot();
     const saved = await api(current ? 'blog/' + current.id : 'blog', current ? 'PUT' : 'POST', body);
     if (generation !== editorGeneration) return;
-    reviewedVersion = null; current = saved; $('autosave-status').textContent = `Saved at ${new Date().toLocaleTimeString()} · Version ${saved.version}`;
+    saved.author = current?.author || me.displayName;
+    reviewedVersion = null; reviewedSnapshot = null; current = saved; $('autosave-status').textContent = `Saved at ${new Date().toLocaleTimeString()} · Version ${saved.version}`;
     if (!automatic) { if (revision === blogRevision) await openEditor(saved.id); await loadView(); }
   } catch (error) { autosaveBlocked = true; $('editor-error').textContent = error.message + ' Autosave paused; reopen the article to resolve changes.'; }
   finally {
@@ -132,9 +158,9 @@ async function saveBlog(automatic = false) {
 }
 $('blog-form')?.addEventListener('submit', async event => { event.preventDefault(); clearTimeout(autosaveTimer); await saveBlog(); });
 $('blog-form')?.addEventListener('input', () => {
-  reviewedVersion = null; blogRevision++;
+  reviewedVersion = null; reviewedSnapshot = null; blogRevision++;
   clearTimeout(autosaveTimer);
-  if (!$('blog-form').elements.title.disabled) autosaveTimer = setTimeout(() => { if ($('editor').open) saveBlog(true); }, 3000);
+  if (!$('blog-form').elements.title.disabled && current?.status !== 'Published') autosaveTimer = setTimeout(() => { if ($('editor').open) saveBlog(true); }, 3000);
 });
 $('format-toolbar')?.addEventListener('click', event => {
   const format = event.target.dataset.format; if (!format) return;
@@ -144,19 +170,29 @@ $('format-toolbar')?.addEventListener('click', event => {
   if (format === 'link') { const url = prompt('HTTPS link'); if (!url) return; try { if (new URL(url).protocol !== 'https:') return; } catch { return; } value = '[' + selected + '](' + url + ')'; }
   form.elements.contentFormat.value = 'Markdown'; input.setRangeText(value, input.selectionStart, input.selectionEnd, 'end'); input.dispatchEvent(new Event('input', {bubbles:true})); input.focus();
 });
-$('preview-blog')?.addEventListener('click', () => {
-  const root = $('article-preview'), form = $('blog-form');
-  const data = new FormData(form);
-  reviewedVersion = current && !savingBlog && fields.every(key => (form.elements[key].value || '') === (current[key] || (key === 'contentFormat' ? 'PlainText' : ''))) ? current.version : null;
-  if (isBlogAdmin()) $('editor-error').textContent = reviewedVersion === null ? 'Save your changes, then preview again before publishing.' : 'Review the preview below, then choose Publish reviewed article.';
-  root.hidden = false; root.replaceChildren();
-  const heading = document.createElement('h2'); heading.textContent = form.elements.title.value;
-  const excerpt = document.createElement('p'); excerpt.textContent = form.elements.excerpt.value;
-  const body = document.createElement('div'); body.className = 'article-body'; FhgmContent.render(body, form.elements.content.value, form.elements.contentFormat.value);
-  root.append(heading, excerpt);
-  try { const url = new URL(form.elements.featuredImageUrl.value); if (url.protocol === 'https:') { const img = document.createElement('img'); img.src = url.href; img.alt = form.elements.title.value; img.className = 'img-fluid'; root.append(img); } } catch (_) { /* Optional image. */ }
-  root.append(body);
+function blogSnapshot() { return JSON.stringify(fields.map(key => $('blog-form').elements[key].value)); }
+function sendBlogPreview() {
+  if (previewPayload) $('website-preview').contentWindow.postMessage(previewPayload, location.origin);
+}
+function showBlogPreview() {
+  const form = $('blog-form');
+  // The preview tracks this exact form content; saving or editing invalidates it.
+  reviewedVersion = null; reviewedSnapshot = null;
+  previewPayload = {type:'fhgm-article-preview', key:blogSnapshot(), post:{...Object.fromEntries(fields.map(key => [key, form.elements[key].value])), author:current?.author || me.displayName, publishedAt:current?.publishedAt}};
+  $('article-preview').hidden = false; sendBlogPreview();
+}
+window.addEventListener('message', event => {
+  if (event.origin !== location.origin || event.source !== $('website-preview')?.contentWindow) return;
+  if (event.data?.type === 'fhgm-preview-ready') { sendBlogPreview(); return; }
+  if (event.data?.type !== 'fhgm-preview-rendered' || !previewPayload || event.data.key !== previewPayload.key || event.data.key !== blogSnapshot() || savingBlog) return;
+  reviewedSnapshot = event.data.key;
+  const form = $('blog-form');
+  reviewedVersion = current && fields.every(key => (form.elements[key].value || '') === (current[key] || (key === 'contentFormat' ? 'PlainText' : ''))) ? current.version : null;
+  if (isBlogAdmin()) $('editor-error').textContent = current?.status === 'Published' ? 'Review the website preview, then choose Save published changes.' : reviewedVersion === null ? 'Save your changes, then preview again before publishing.' : 'Review the preview, then choose Publish reviewed article.';
 });
+$('preview-blog')?.addEventListener('click', showBlogPreview);
+$('preview-desktop')?.addEventListener('click', () => { $('website-preview').classList.remove('mobile-preview'); });
+$('preview-mobile')?.addEventListener('click', () => { $('website-preview').classList.add('mobile-preview'); });
 $('user-form')?.addEventListener('submit', async event => { event.preventDefault(); await perform(event.submitter, async () => { await api('users','POST',Object.fromEntries(new FormData(event.target))); event.target.reset(); pages.users = 1; await loadView(); notice('Team account created.'); }); });
 for (const [prefix, view] of [['blog','blogs'],['user','users'],['audit','audit']]) for (const [direction, offset] of [['prev',-1],['next',1]]) $(prefix + '-' + direction)?.addEventListener('click', () => perform($(prefix + '-' + direction), async () => { pages[view] += offset; await loadView(); }));
 (async () => { if (!$('workspace')) return; try { me = await api('auth/me'); await showWorkspace(); } catch (error) { if (me) notice(error.message, true); else showLogin(); } })();

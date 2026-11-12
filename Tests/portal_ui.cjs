@@ -19,8 +19,8 @@ const assert = require('node:assert/strict');
  await page.locator('#blog-form [name=contentFormat]').selectOption('Markdown');
  await page.locator('#blog-form [name=content]').fill('## Heading\n**Bold text**\n<script>alert(1)</script>');
  await page.locator('#preview-blog').click();
- assert.equal(await page.locator('#article-preview strong').textContent(),'Bold text');
- assert.equal(await page.locator('#article-preview script').count(),0);
+ assert.equal(await page.frameLocator('#website-preview').locator('#cmsContent strong').textContent(),'Bold text');
+ assert.equal(await page.frameLocator('#website-preview').locator('#cmsContent script').count(),0);
  await page.waitForFunction(() => document.querySelector('#autosave-status').textContent.startsWith('Saved at'));
  let delayed = false;
  await page.route('**/api/blog/*', async route => {
@@ -38,9 +38,33 @@ const assert = require('node:assert/strict');
  await page.getByRole('button', {name:'Publish reviewed article', exact:true}).click();
  await page.waitForFunction(() => document.querySelector('#editor-error').textContent.includes('Use Preview'));
  await page.locator('#preview-blog').click();
+ await page.waitForFunction(() => reviewedVersion === current.version);
  page.once('dialog', dialog => dialog.accept());
  await page.getByRole('button', {name:'Publish reviewed article', exact:true}).click();
  await page.waitForFunction(() => document.querySelector('#editor-status').textContent.startsWith('Published'));
+ // Published content stays live until an explicit, previewed save.
+ await page.locator('#blog-form [name=content]').fill('Reviewed change to the published article');
+ await page.locator('#save-blog').click();
+ await page.waitForFunction(() => document.querySelector('#editor-error').textContent.includes('Preview the updated article'));
+ await page.locator('#preview-blog').click();
+ await page.waitForFunction(() => reviewedSnapshot === blogSnapshot());
+ assert.equal(await page.frameLocator('#website-preview').locator('#cmsContent .cms-copy').textContent(), 'Reviewed change to the published article');
+ await page.locator('#preview-mobile').click();
+ assert.equal(await page.locator('#website-preview').evaluate(el => Math.round(el.getBoundingClientRect().width)), 390);
+ page.once('dialog', dialog => dialog.accept());
+ await page.locator('#save-blog').click();
+ await page.waitForFunction(() => current?.content === 'Reviewed change to the published article' && !savingBlog);
+ assert.equal(await page.locator('#blog-form [name=content]').isEditable(), true);
+ // Unpublish and republish without another person's approval.
+ page.once('dialog', dialog => dialog.accept());
+ await page.locator('#workflow').getByRole('button', {name:'Unpublish', exact:true}).click();
+ await page.waitForFunction(() => current?.status === 'Draft');
+ await page.locator('#preview-blog').click();
+ await page.waitForFunction(() => reviewedVersion === current.version);
+ page.once('dialog', dialog => dialog.accept());
+ await page.getByRole('button', {name:'Publish reviewed article', exact:true}).click();
+ await page.waitForFunction(() => current?.status === 'Published');
+
  page.once('dialog', dialog => dialog.accept());
  await page.locator('#close-editor').click();
  assert.equal(await page.locator('#blog-workflow-summary').textContent(), 'Save → Preview → Publish');
