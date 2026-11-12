@@ -22,6 +22,7 @@ const assert = require('node:assert/strict');
  await page.locator('#preview-blog').click();
  assert.equal(await page.frameLocator('#website-preview').locator('#cmsContent strong').textContent(),'Bold text');
  assert.equal(await page.frameLocator('#website-preview').locator('#cmsContent script').count(),0);
+ await page.locator('#review-edit').click();
  await page.waitForFunction(() => document.querySelector('#autosave-status').textContent.startsWith('Saved at'));
  let delayed = false;
  await page.route('**/api/blog/*', async route => {
@@ -36,26 +37,32 @@ const assert = require('node:assert/strict');
  await page.locator('#save-blog').click();
  await page.waitForFunction(() => document.querySelector('#blog-rows').textContent.includes('Browser article'));
  await page.locator('#delete-current-blog').waitFor({state:'visible'});
- await page.getByRole('button', {name:'Publish reviewed article', exact:true}).click();
- await page.waitForFunction(() => document.querySelector('#editor-error').textContent.includes('Use Preview'));
- await page.locator('#preview-blog').click();
+ assert.equal(await page.locator('#blog-form').isHidden(), true);
  await page.waitForFunction(() => reviewedVersion === current.version);
+ assert.equal(await page.frameLocator('#website-preview').locator('#cmsTitle').textContent(), title);
  page.once('dialog', dialog => dialog.accept());
  await page.getByRole('button', {name:'Publish reviewed article', exact:true}).click();
  await page.waitForFunction(() => document.querySelector('#editor-status').textContent.startsWith('Published'));
- // Published content stays live until an explicit, previewed save.
+ // Save a published revision privately and automatically enter review.
+ const publishedSlug = await page.locator('#blog-form [name=slug]').inputValue();
  await page.locator('#blog-form [name=content]').fill('Reviewed change to the published article');
  await page.locator('#save-blog').click();
- await page.waitForFunction(() => document.querySelector('#editor-error').textContent.includes('Preview the updated article'));
- await page.locator('#preview-blog').click();
- await page.waitForFunction(() => reviewedSnapshot === blogSnapshot());
+ await page.waitForFunction(() => current?.hasPendingChanges && reviewedVersion === current.version);
+ assert.equal(await page.locator('#blog-form').isHidden(), true);
+ const beforePublication = await page.request.get(base + '/api/public/blog/' + publishedSlug);
+ assert.equal((await beforePublication.json()).content, 'Latest edit made while saving');
  assert.equal(await page.frameLocator('#website-preview').locator('#cmsContent .cms-copy').textContent(), 'Reviewed change to the published article');
  await page.locator('#preview-mobile').click();
  assert.equal(await page.locator('#website-preview').evaluate(el => Math.round(el.getBoundingClientRect().width)), 390);
- page.once('dialog', dialog => dialog.accept());
- await page.locator('#save-blog').click();
- await page.waitForFunction(() => current?.content === 'Reviewed change to the published article' && !savingBlog);
+ await page.locator('#review-edit').click();
  assert.equal(await page.locator('#blog-form [name=content]').isEditable(), true);
+ await page.locator('#save-blog').click();
+ await page.waitForFunction(() => current?.hasPendingChanges && reviewedVersion === current.version);
+ page.once('dialog', dialog => dialog.accept());
+ await page.getByRole('button', {name:'Publish reviewed changes', exact:true}).click();
+ await page.waitForFunction(() => !current?.hasPendingChanges && current?.status === 'Published');
+ const afterPublication = await page.request.get(base + '/api/public/blog/' + publishedSlug);
+ assert.equal((await afterPublication.json()).content, 'Reviewed change to the published article');
  // Unpublish and republish without another person's approval.
  page.once('dialog', dialog => dialog.accept());
  await page.locator('#workflow').getByRole('button', {name:'Unpublish', exact:true}).click();
@@ -88,9 +95,10 @@ const assert = require('node:assert/strict');
  const albumId = await page.locator('#album-select').inputValue();
  const uploads = []; page.on('request', request => { if (request.url().endsWith('/api/gallery/uploads') && request.method() === 'POST') uploads.push(request.postDataJSON()); });
  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');
- let fail = true;
+ let fail = true, activePuts = 0, peakPuts = 0;
  await page.route('http://127.0.0.1:9002/**', async route => {
   if (route.request().method() === 'PUT' && fail) { fail = false; await route.abort('failed'); }
+  else if (route.request().method() === 'PUT') { activePuts++; peakPuts = Math.max(peakPuts, activePuts); await new Promise(resolve => setTimeout(resolve, 500)); await route.continue(); activePuts--; }
   else await route.continue();
  });
  await page.locator('#gallery-files').setInputFiles({name:'browser.png',mimeType:'image/png',buffer:png});
@@ -152,10 +160,22 @@ const assert = require('node:assert/strict');
  assert.equal(await page.locator('#gallery-upload').isDisabled(), true);
  await page.locator('#select-photos').click(); await page.locator('#publish-photos').click();
  await page.waitForFunction(() => Array.from(document.querySelectorAll('#gallery-images .badge')).every(x => x.textContent === 'Published photo'));
+ assert.ok(peakPuts >= 2 && peakPuts <= 3, 'Bulk files should upload concurrently within the worker limit');
+ // A clicked photo opens its own editor, and saving must not affect its neighbours.
+ await page.getByRole('button',{name:'Edit photo: standalone single',exact:true}).click();
+ await page.locator('#gallery-image-form [name=altText]').fill('Church worship revised');
+ await page.locator('#gallery-image-form [name=caption]').fill('Sunday service caption');
+ await page.locator('#gallery-editor-save').click();
+ await page.waitForFunction(() => !document.querySelector('#gallery-image-editor').open);
+ const publicPhotos = await page.request.get(base + '/api/public/gallery/images');
+ const publicItems = (await publicPhotos.json()).items;
+ assert.equal(publicItems.filter(item => item.altText === 'Church worship revised' && item.caption === 'Sunday service caption').length, 1);
+ assert.equal(publicItems.filter(item => item.altText === 'single a').length, 1);
+ assert.equal(publicItems.filter(item => item.altText === 'single b').length, 1);
  // Publish standalone uploads and verify the actual public widget renders them.
  const popup = await browser.newPage();
  await popup.goto(base + '/public/gallery');
- await popup.waitForFunction(() => Array.from(document.querySelectorAll('.fhgm-gallery-card img')).some(img => img.alt === 'standalone single'));
+ await popup.waitForFunction(() => Array.from(document.querySelectorAll('.fhgm-gallery-card img')).some(img => img.alt === 'Church worship revised'));
  assert.equal(await popup.locator('.fhgm-gallery-card img[alt="single a"]').count(), 1);
  await popup.screenshot({path:'test-results/gallery-public-photos.png',fullPage:true});
  await popup.close();

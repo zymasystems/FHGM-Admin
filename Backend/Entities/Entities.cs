@@ -38,6 +38,7 @@ public sealed class BlogPost
     [MaxLength(320)] public string SeoDescription { get; set; } = "";
     [MaxLength(2000)] public string FeaturedImageUrl { get; set; } = "";
     [MaxLength(20)] public string ContentFormat { get; set; } = "PlainText";
+    [System.Text.Json.Serialization.JsonIgnore] public string? PendingRevisionJson { get; set; }
     public string AuthorId { get; set; } = "";
     [System.Text.Json.Serialization.JsonIgnore] public AppUser Author { get; set; } = null!;
     public BlogStatus Status { get; set; }

@@ -245,3 +245,11 @@ The deployment workflow sets `FHGM_RELEASE_SHA`, checks the running frontend thr
 The deployment run for merge `91adc4e` stopped after `backend --initialize`, before `up -d`, health checks or public release verification, while reporting success. `docker compose run` inherited stdin from `ssh ... bash -s` and could consume the remaining remote script. Initialization now uses `-T` and redirects stdin from `/dev/null`, so the remote shell executes the frontend restart and release checks. The workflow prints `FHGM_DEPLOY_VERIFIED=<commit>` only after all checks pass.
 
 `Tests/deploy_stream_test.py` reproduces the previous false success using command shims, verifies that the fixed streamed script reaches frontend startup and public gallery checks, and confirms that a stale public release fails deployment. It runs in CI without connecting to the VPS or mutating client data.
+
+## TEST reviews workflow refinements
+
+Gallery uploads use a worker pool of at most three simultaneous uploads. Selected previews, optional albums, progress and failed-file retries remain. Existing photos are compact cards: click a photo or Edit photo to open its description/caption/publication dialog. Saving uses that image's ID and version; other photos are not updated.
+
+For administrators, manual **Save & review** validates and saves the article, then opens its website preview in the same dialog. Back to editing returns to the form; Cancel leaves the saved draft/revision private. Publication remains an explicit reviewed action. Other roles retain their submission/approval rules.
+
+An additive migration adds a nullable private `PendingRevisionJson` column to the existing BlogPosts table. Saving an edit to a published article writes this pending revision only. Staff read/preview responses load it; public feeds/details continue using the live columns. Explicit Publish atomically applies the revision, clears it and increments the concurrency version. Unpublish/archive hides the article and retains the working revision as normal hidden content. No duplicate article tables or public draft endpoints are created. Apply migrations through the normal backend initialization step; rollback refuses to discard unresolved revisions.

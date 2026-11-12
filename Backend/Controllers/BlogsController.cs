@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FHGM.Backend.Authentication;
 using FHGM.Backend.DTOs;
 using FHGM.Backend.Repositories;
@@ -25,7 +26,7 @@ public sealed class BlogsController(IBlogRepository blogs, UserManager<AppUser> 
         if (!IsEditor) query = query.Where(x => x.AuthorId == UserId);
         return Ok(new { total = await query.CountAsync(), page,
             items = await query.OrderByDescending(x => x.UpdatedAt).Skip((page - 1) * 25).Take(25)
-                .Select(x => new { x.Id, x.Title, x.Slug, x.Status, x.Version, x.UpdatedAt, author = x.Author.DisplayName }).ToListAsync() });
+                .Select(x => new { x.Id, x.Title, x.Slug, x.Status, x.Version, x.UpdatedAt, hasPendingChanges = x.PendingRevisionJson != null, author = x.Author.DisplayName }).ToListAsync() });
     }
 
     [HttpGet("{id:guid}")]
@@ -33,10 +34,7 @@ public sealed class BlogsController(IBlogRepository blogs, UserManager<AppUser> 
     {
         var post = await blogs.Read().FirstOrDefaultAsync(x => x.Id == id);
         if (post is null || (!IsEditor && post.AuthorId != UserId)) return NotFound();
-        return Ok(new { post.Id, post.Title, post.Slug, post.Excerpt, post.Content, post.Category, post.Tags,
-            post.SeoTitle, post.SeoDescription, post.FeaturedImageUrl, post.ContentFormat, post.AuthorId,
-            post.Status, post.ReviewNote, post.Version, post.CreatedAt, post.UpdatedAt, post.SubmittedAt,
-            post.ApprovedAt, post.PublishedAt, author = await users.Users.Where(x => x.Id == post.AuthorId).Select(x => x.DisplayName).FirstOrDefaultAsync() });
+        return Ok(await StaffPost(post));
     }
 
     [HttpPost]
@@ -58,13 +56,15 @@ public sealed class BlogsController(IBlogRepository blogs, UserManager<AppUser> 
         if (!IsAdmin && (!BlogWorkflow.CanEdit(post.Status) || (!IsEditor && post.Status == BlogStatus.Submitted)))
             return Conflict(new { message = "This article cannot be edited at its current stage. Archive and restore a published article before revising it." });
         if (post.Version != request.Version) return Conflict(new { message = "Reload this article; someone else changed it." });
-        if (post.Status == BlogStatus.Published && !request.Reviewed)
-            return BadRequest(new { message = "Preview the updated article before saving changes to the live website." });
-        Apply(post, request);
+        if (await blogs.Read().AnyAsync(x => x.Id != id && x.Slug == request.Slug.Trim()))
+            return Conflict(new { message = "That article URL is already in use." });
+        if (post.Status == BlogStatus.Published)
+            post.PendingRevisionJson = JsonSerializer.Serialize(request);
+        else { Apply(post, request); post.PendingRevisionJson = null; }
         post.Version++;
-        audit.Record(post.Status == BlogStatus.Published ? "BlogPublishedContentEdited" : "BlogEdited", "BlogPost", post.Id.ToString());
+        audit.Record(post.Status == BlogStatus.Published ? "BlogRevisionSaved" : "BlogEdited", "BlogPost", post.Id.ToString());
         await blogs.SaveAsync();
-        return Ok(post);
+        return Ok(await StaffPost(post));
     }
 
     [HttpPost("{id:guid}/workflow")]
@@ -75,7 +75,7 @@ public sealed class BlogsController(IBlogRepository blogs, UserManager<AppUser> 
         if (!IsEditor && request.Action != "submit") return Forbid();
         if (post.Version != request.Version) return Conflict(new { message = "Reload this article; someone else changed it." });
         if (request.Action == "unpublish" && !IsAdmin) return Forbid();
-        var directPublish = IsAdmin && request.Action == "publish" && post.Status != BlogStatus.Published;
+        var directPublish = IsAdmin && request.Action == "publish" && (post.Status != BlogStatus.Published || post.PendingRevisionJson != null);
         if (IsAdmin && request.Action == "publish" && !request.Reviewed)
             return BadRequest(new { message = "Preview and review the saved article before publishing." });
         BlogStatus? next = directPublish ? BlogStatus.Published
@@ -85,6 +85,13 @@ public sealed class BlogsController(IBlogRepository blogs, UserManager<AppUser> 
         if (next is null) return Conflict(new { message = "That action is not allowed at the current stage." });
         if (request.Action is "request-changes" or "reject" && string.IsNullOrWhiteSpace(request.Note))
             return BadRequest(new { message = "Provide a review note for the writer." });
+        // A saved revision only becomes live on explicit publish. If hidden first,
+        // carry the working content into that draft/archive without exposing it.
+        if (post.PendingRevisionJson != null && (IsAdmin && request.Action == "publish" || next != BlogStatus.Published))
+        {
+            Apply(post, JsonSerializer.Deserialize<BlogRequest>(post.PendingRevisionJson)!);
+            post.PendingRevisionJson = null;
+        }
         post.Status = next.Value;
         post.ReviewNote = request.Note.Trim();
         post.UpdatedAt = DateTimeOffset.UtcNow;
@@ -95,7 +102,7 @@ public sealed class BlogsController(IBlogRepository blogs, UserManager<AppUser> 
         if (next == BlogStatus.Draft) { post.ApprovedAt = null; post.PublishedAt = null; }
         audit.Record("Blog:" + request.Action, "BlogPost", post.Id.ToString());
         await blogs.SaveAsync();
-        return Ok(post);
+        return Ok(await StaffPost(post));
     }
 
     [HttpDelete("{id:guid}"), Authorize(Roles = Roles.SuperAdmin + "," + Roles.ChurchAdmin)]
@@ -108,6 +115,19 @@ public sealed class BlogsController(IBlogRepository blogs, UserManager<AppUser> 
         audit.Record("BlogDeleted", "BlogPost", post.Id.ToString());
         await blogs.SaveAsync();
         return NoContent();
+    }
+
+    private async Task<object> StaffPost(BlogPost post)
+    {
+        var revision = post.PendingRevisionJson is null ? null : JsonSerializer.Deserialize<BlogRequest>(post.PendingRevisionJson);
+        return new { post.Id, Title = revision?.Title.Trim() ?? post.Title, Slug = revision?.Slug.Trim() ?? post.Slug,
+            Excerpt = revision?.Excerpt.Trim() ?? post.Excerpt, Content = revision?.Content.Trim() ?? post.Content,
+            Category = revision?.Category.Trim() ?? post.Category, Tags = revision?.Tags.Trim() ?? post.Tags,
+            SeoTitle = revision?.SeoTitle.Trim() ?? post.SeoTitle, SeoDescription = revision?.SeoDescription.Trim() ?? post.SeoDescription,
+            FeaturedImageUrl = revision?.FeaturedImageUrl ?? post.FeaturedImageUrl, ContentFormat = revision?.ContentFormat ?? post.ContentFormat,
+            post.AuthorId, post.Status, post.ReviewNote, post.Version, post.CreatedAt, post.UpdatedAt, post.SubmittedAt,
+            post.ApprovedAt, post.PublishedAt, hasPendingChanges = revision != null,
+            author = await users.Users.Where(x => x.Id == post.AuthorId).Select(x => x.DisplayName).FirstOrDefaultAsync() };
     }
 
     private static void Apply(BlogPost post, BlogRequest request)
