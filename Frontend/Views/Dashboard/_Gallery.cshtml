@@ -15,3 +15,13 @@
     </div>
 </section>
 
+
+<dialog id="gallery-image-editor" aria-labelledby="gallery-editor-title"><form id="gallery-image-form">
+<div class="dialog-heading"><h2 id="gallery-editor-title">Edit photo</h2><button type="button" id="gallery-editor-close" class="btn outline">Cancel</button></div>
+<img id="gallery-editor-image" class="gallery-editor-image" alt="">
+<p id="gallery-editor-name" class="small muted"></p>
+<label class="mb-3">Image description (alt text)<input name="altText" class="form-control" maxlength="300" required></label>
+<label class="mb-3">Caption<textarea name="caption" class="form-control" maxlength="1000" rows="3"></textarea></label>
+<label class="check-label mb-3"><input name="isPublished" type="checkbox"> Publish photo</label>
+<p id="gallery-editor-error" class="error" role="alert"></p><button id="gallery-editor-save" type="submit" class="btn primary">Save photo</button>
+</form></dialog>

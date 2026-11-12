@@ -49,14 +49,22 @@ for actor, suffix in [(admin, 'developer'), (church, 'church')]:
     assert published['status'] == 'Published'
     public_path = '/api/public/blog/'+published['slug']
     anonymous.request(public_path)
-    change = {'title':'Updated admin article','slug':published['slug'],'excerpt':'Updated preview','content':'Reviewed live update','version':published['version']}
-    actor.request(path, 'PUT', change, expected=400)
+    change = {'title':'Updated admin article','slug':published['slug'],'excerpt':'Updated preview','content':'Reviewed live update','seoTitle':'Private SEO revision','category':'Private category','version':published['version']}
+    saved_revision = actor.request(path, 'PUT', change)
+    assert saved_revision['hasPendingChanges'] and saved_revision['content'] == 'Reviewed live update'
+    live_before = anonymous.request(public_path)
+    assert live_before['content'] == 'Ready for publication' and live_before['seoTitle'] == '' and live_before['category'] == ''
+    assert 'pendingRevisionJson' not in live_before and 'hasPendingChanges' not in live_before
     writer.request(path, 'PUT', {**change,'reviewed':True}, expected=404)
     from integration import editor
     editor.request(path, 'PUT', {**change,'reviewed':True}, expected=409)
-    published = actor.request(path, 'PUT', {**change,'reviewed':True})
-    assert published['status'] == 'Published'
-    assert anonymous.request(public_path)['content'] == 'Reviewed live update'
+    assert actor.request(path)['content'] == 'Reviewed live update'
+    actor.request(path+'/workflow','POST',{'action':'publish','version':saved_revision['version']},expected=400)
+    actor.request(path+'/workflow','POST',{'action':'publish','version':change['version'],'reviewed':True},expected=409)
+    published = actor.request(path+'/workflow','POST',{'action':'publish','version':saved_revision['version'],'reviewed':True})
+    assert published['status'] == 'Published' and not published['hasPendingChanges']
+    live_after = anonymous.request(public_path)
+    assert live_after['content'] == 'Reviewed live update' and live_after['seoTitle'] == 'Private SEO revision' and live_after['category'] == 'Private category'
     actor.request(path, 'PUT', {**change,'reviewed':True}, expected=409)
     editor.request(path+'/workflow','POST',{'action':'unpublish','version':published['version']},expected=403)
     unpublished = actor.request(path+'/workflow','POST',{'action':'unpublish','version':published['version']})
