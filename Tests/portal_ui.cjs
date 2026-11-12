@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 (async () => {
  const browser = await chromium.launch({headless:true});
  const page = await browser.newPage();
+ require('node:fs').mkdirSync('test-results', {recursive:true});
  const base = process.env.FHGM_TEST_URL || 'http://127.0.0.1:5080';
  await page.goto(base + '/account/login');
  await page.locator('[name=email]').fill(process.env.Bootstrap__Email);
@@ -83,7 +84,9 @@ const assert = require('node:assert/strict');
  await page.locator('#album-form [name=title]').fill('Browser gallery');
  await page.locator('#album-form [name=slug]').fill('browser-gallery-' + Date.now());
  await page.locator('#album-form button[type=submit]').click();
- await page.waitForFunction(() => !document.querySelector('#gallery-upload').disabled);
+ await page.waitForFunction(() => document.querySelector('#album-select').value !== '' && !document.querySelector('#album-select').disabled);
+ const albumId = await page.locator('#album-select').inputValue();
+ const uploads = []; page.on('request', request => { if (request.url().endsWith('/api/gallery/uploads') && request.method() === 'POST') uploads.push(request.postDataJSON()); });
  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');
  let fail = true;
  await page.route('http://127.0.0.1:9002/**', async route => {
@@ -91,8 +94,13 @@ const assert = require('node:assert/strict');
   else await route.continue();
  });
  await page.locator('#gallery-files').setInputFiles({name:'browser.png',mimeType:'image/png',buffer:png});
+ await page.waitForFunction(() => document.querySelector('#gallery-file-previews img')?.naturalWidth > 0);
+ assert.equal(await page.locator('#gallery-file-previews article').count(), 1);
+ assert.equal(await page.locator('#album-select').getAttribute('required'), null);
  await page.locator('#gallery-upload').click();
  await page.waitForFunction(() => document.querySelector('#upload-queue').textContent.includes('Failed:'));
+ await page.waitForFunction(() => document.querySelector('#upload-queue button'));
+ assert.match(await page.locator('#gallery-upload-status').textContent(), /1 failed/);
  await page.getByRole('button',{name:'Retry photo'}).click();
  await page.waitForFunction(() => document.querySelector('#upload-queue').textContent.includes('Uploaded · draft'));
  await page.waitForFunction(() => document.querySelectorAll('#gallery-images article').length === 1);
@@ -104,28 +112,53 @@ const assert = require('node:assert/strict');
  await page.locator('[name=uploadMode][value=bulk]').check();
  await page.locator('#gallery-files').setInputFiles([
   {name:'album-a.png',mimeType:'image/png',buffer:png},
-  {name:'album-b.png',mimeType:'image/png',buffer:png}
+  {name:'album-b.png',mimeType:'image/png',buffer:png},
+  {name:'album-discard.png',mimeType:'image/png',buffer:png}
  ]);
+ await page.waitForFunction(() => document.querySelectorAll('#gallery-file-previews img').length === 3 && Array.from(document.querySelectorAll('#gallery-file-previews img')).every(img => img.naturalWidth > 0));
+ await page.getByRole('button',{name:'Remove album-discard.png',exact:true}).click();
+ assert.equal(await page.locator('#gallery-file-previews article').count(), 2);
+ await page.screenshot({path:'test-results/gallery-bulk-selection.png',fullPage:true});
  await page.locator('#gallery-upload').click();
  await page.waitForFunction(() => document.querySelectorAll('#gallery-images article').length === 3);
+ assert.deepEqual(uploads.slice(-2).map(x => x.albumId), [albumId,albumId]);
+ assert.ok(!uploads.some(x => x.fileName === 'album-discard.png'));
  await page.locator('#album-select').selectOption('');
  await page.waitForFunction(() => document.querySelector('#album-form').hidden);
  await page.locator('[name=uploadMode][value=single]').check();
  assert.equal(await page.locator('#gallery-files').getAttribute('multiple'), null);
  // A single image succeeds with no album selected.
  await page.locator('#gallery-files').setInputFiles({name:'standalone-single.png',mimeType:'image/png',buffer:png});
+ await page.waitForFunction(() => document.querySelector('#gallery-file-previews img')?.naturalWidth > 0);
+ await page.screenshot({path:'test-results/gallery-single-selection.png',fullPage:true});
  await page.locator('#gallery-upload').click();
  await page.waitForFunction(() => document.querySelectorAll('#gallery-images article').length === 1);
+ assert.equal(uploads.at(-1).albumId, null);
  await page.locator('[name=uploadMode][value=bulk]').check();
  assert.notEqual(await page.locator('#gallery-files').getAttribute('multiple'), null);
  await page.locator('#gallery-files').setInputFiles([
   {name:'single-a.png',mimeType:'image/png',buffer:png},
-  {name:'single-b.png',mimeType:'image/png',buffer:png}
+  {name:'single-b.png',mimeType:'image/png',buffer:png},
+  {name:'standalone-discard.png',mimeType:'image/png',buffer:png}
  ]);
+ await page.waitForFunction(() => document.querySelectorAll('#gallery-file-previews img').length === 3);
+ await page.getByRole('button',{name:'Remove standalone-discard.png',exact:true}).click();
+ assert.equal(await page.locator('#gallery-file-previews article').count(), 2);
  await page.locator('#gallery-upload').click();
  await page.waitForFunction(() => document.querySelectorAll('#gallery-images article').length === 3);
+ assert.deepEqual(uploads.slice(-2).map(x => x.albumId), [null,null]);
+ assert.ok(!uploads.some(x => x.fileName === 'standalone-discard.png'));
+ assert.match(await page.locator('#gallery-progress-label').textContent(), /2 of 2 uploaded/);
+ assert.equal(await page.locator('#gallery-upload').isDisabled(), true);
  await page.locator('#select-photos').click(); await page.locator('#publish-photos').click();
  await page.waitForFunction(() => Array.from(document.querySelectorAll('#gallery-images .badge')).every(x => x.textContent === 'Published photo'));
+ // Publish standalone uploads and verify the actual public widget renders them.
+ const popup = await browser.newPage();
+ await popup.goto(base + '/public/gallery');
+ await popup.waitForFunction(() => Array.from(document.querySelectorAll('.fhgm-gallery-card img')).some(img => img.alt === 'standalone single'));
+ assert.equal(await popup.locator('.fhgm-gallery-card img[alt="single a"]').count(), 1);
+ await popup.screenshot({path:'test-results/gallery-public-photos.png',fullPage:true});
+ await popup.close();
  await page.goto(base + '/account/security');
  await page.waitForFunction(() => document.querySelector('#security-status').textContent.includes('Authenticator'));
  await browser.close();

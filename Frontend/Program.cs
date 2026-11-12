@@ -46,9 +46,10 @@ app.UseExceptionHandler();
 app.UseForwardedHeaders();
 app.Use(async (context, next) =>
 {
+    context.Response.Headers["X-FHGM-Release"] = builder.Configuration["Deployment:Revision"] ?? "development";
     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
     context.Response.Headers["Referrer-Policy"] = "same-origin";
-    context.Response.Headers["Content-Security-Policy"] = $"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: {mediaOrigin}; connect-src 'self' https://*.r2.cloudflarestorage.com {developmentStorage}; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
+    context.Response.Headers["Content-Security-Policy"] = $"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: {mediaOrigin}; connect-src 'self' https://*.r2.cloudflarestorage.com {developmentStorage}; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
     if (context.Request.Path.StartsWithSegments("/website-preview"))
         context.Response.Headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'none'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'";
     context.Response.Headers.CacheControl = "no-store";
@@ -65,6 +66,7 @@ app.Map("/api/{**path}", async (HttpContext context, BackendClient backend) => a
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapGet("/health/version", () => Results.Ok(new { revision = builder.Configuration["Deployment:Revision"] ?? "development", galleryUi = "optional-album-previews-v2" }));
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
 app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = r => r.Tags.Contains("ready") });
 app.Run();

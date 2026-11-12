@@ -8,6 +8,7 @@ import datetime as dt
 import church_content_integration as church_checks
 from integration import admin, anonymous, other as writer, media, Client, PASSWORD, PREFIX
 
+assert anonymous.request('/health/version')['galleryUi'] == 'optional-album-previews-v2'
 church = church_checks.church
 comms = church_checks.comms
 assert writer.request('/api/dashboard')['unpublishedPhotos'] is None
