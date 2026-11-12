@@ -86,6 +86,13 @@ jobs:
             sleep 1
           done
           if ! python3 Tests/portal_improvements.py || ! node Tests/portal_ui.cjs; then cat /tmp/fhgm-backend.log /tmp/fhgm-frontend.log; exit 1; fi
+      - name: Upload gallery browser screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gallery-ui-screenshots
+          path: test-results/*.png
+          if-no-files-found: ignore
       - name: Validate Compose and build both container images
         env:
           POSTGRES_PASSWORD: ci-only-build-password

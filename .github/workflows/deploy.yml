@@ -64,6 +64,7 @@ jobs:
           git checkout --detach "$2"
           test -f .env
 
+          export FHGM_RELEASE_SHA="$2"
           docker compose --env-file .env -f deploy/docker-compose.yml config --quiet
           docker compose --env-file .env -f deploy/docker-compose.yml build
           docker compose --env-file .env -f deploy/docker-compose.yml up -d db
@@ -72,6 +73,10 @@ jobs:
 
           for attempt in {1..30}; do
             if curl -fsS http://127.0.0.1:5081/health/ready; then
+              # Verify the public vhost serves this release, not a stale process on another port.
+              version=$(curl -fsS --max-time 20 https://admin.hisgraceministries.co.za/health/version)
+              echo "$version" | grep -F -- "\"revision\":\"$2\""
+              curl -fsS --max-time 20 https://admin.hisgraceministries.co.za/admin/gallery.js | grep -F 'optional-album-previews-v2'
               exit 0
             fi
             sleep 2

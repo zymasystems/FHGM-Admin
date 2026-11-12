@@ -39,9 +39,9 @@ docker compose --env-file .env -f deploy/docker-compose.yml run --rm backend --i
 docker compose --env-file .env -f deploy/docker-compose.yml up -d
 ```
 
-Open **http://localhost:5080/** and sign in with the configured initial account. Use **Photo gallery** to manage albums and upload images, **Blog articles** to write or review, **Team members** to add users and **Activity log** to inspect actions. `/public/gallery` previews the photo gallery; `/public/` is a preview of the blog feed, not a replacement for the ministry website.
+Open **http://localhost:5081/** for Docker Compose and sign in with the configured initial account. Use **Photo gallery** to manage albums and upload images, **Blog articles** to write or review, **Team members** to add users and **Activity log** to inspect actions. `/public/gallery` previews the photo gallery; `/public/` is a preview of the blog feed, not a replacement for the ministry website.
 
-The backend and PostgreSQL have **no published host ports**. Only MVC is bound to `127.0.0.1:5080` for the host Nginx proxy. The private network isolates the database; backend egress is enabled for future R2/email connections. Data Protection keys and database contents persist in named volumes. `down -v` destroys the volumes and their data.
+The backend and PostgreSQL have **no published host ports**. Only MVC is bound to `127.0.0.1:5081` for the host Nginx proxy. The private network isolates the database; backend egress is enabled for future R2/email connections. Data Protection keys and database contents persist in named volumes. `down -v` destroys the volumes and their data.
 
 `--initialize` applies committed migrations and creates roles plus the first SuperAdmin only if no users exist. Run it once at a time. Existing passwords are never reset from bootstrap environment variables. Remove `BOOTSTRAP_EMAIL` and `BOOTSTRAP_PASSWORD` from `.env` after first setup; later migration runs work without them if an account already exists.
 
@@ -229,3 +229,13 @@ ChurchAdmin and SuperAdmin can preview, edit, publish, unpublish, archive and de
 Published articles remain editable, but do not autosave. Preview the exact changed form content and choose **Save published changes**, then confirm, to update the live article. The API requires the current version and a review acknowledgement for published edits. Unpublish returns an article to Draft; archive hides it without deleting it. Deletion is permanent, version-checked, confirmed and audited.
 
 The isolated website preview uses the companion website's blog page shell, styles and safe content renderer, with desktop/mobile widths. It does not publish or expose a draft API. The preview assets under `Frontend/wwwroot/website-preview` are a snapshot of `ForHisGraceMinistries` (source commit e6495c23ddc2ae6bf9ce2419f55f3f01d5db0c60); keep them aligned when the public site's article layout changes. Website logos/fonts/images may need network access to display. No schema migration is required for these blog changes.
+
+## Gallery selection previews and deployment verification
+
+The existing Razor gallery (`Frontend/Views/Dashboard/_Gallery.cshtml`) now shows a selected-image preview grid. `Frontend/wwwroot/admin/gallery.js` validates each selection, permits individual removal/clearing, preserves a valid selection on validation errors, and uploads the remaining files with the selected optional album ID. Single mode retains one file when switching from bulk. Blob URLs are revoked when no longer needed. Upload results include per-file failure/retry and overall completion counts; destination/mode controls are locked during upload. Photos continue to be drafts until published.
+
+The nullable `GalleryImage.AlbumId`, optional upload DTO, migration `20261112100000_StandaloneGalleryImages`, upload verification and standalone public endpoint are already present; no further database migration or storage change is needed. The companion public website's merged standalone feed integration remains required. CI uploads `gallery-ui-screenshots` as evidence of the single/bulk selection UI and rendered public photos.
+
+**Investigated deployment mismatch:** Compose publishes MVC at `127.0.0.1:5081`, while the earlier supplied Nginx examples still targeted `5080`. Updated examples now target `5081`. Check and reload the installed admin/public Nginx vhosts accordingly; repository template edits do not rewrite installed VPS configurations. An old process on 5080 can otherwise continue serving the old UI even after a successful container deployment. This is a repository-confirmed mismatch, not confirmation of the VPS's currently installed configuration.
+
+The deployment workflow sets `FHGM_RELEASE_SHA`, checks the running frontend through HTTPS `/health/version`, and verifies the gallery JavaScript marker before reporting success. The frontend also sends `X-FHGM-Release`. A public-vhost mismatch now fails deployment verification rather than passing on local readiness alone. Local Visual Studio MVC still uses port 5080; Compose/Nginx production examples use 5081.

@@ -1,22 +1,64 @@
 (() => {
   'use strict';
+  // optional-album-previews-v2: used by deployment smoke checks.
   const el = id => document.getElementById(id);
   const standalone = { id: null, title: 'Standalone photos', slug: '', description: '', isPublished: true };
   let albums = [], selected = standalone, albumPage = 1, imagePage = 1, configured = false, search = "", imageItems = [], selectedIds = new Set(), queue = [], uploading = false;
   const form = el('album-form');
   const uploadForm = el('gallery-upload-form');
+  let chosenFiles = [];
+  const previewUrls = new Map();
   const uploadMode = () => uploadForm.elements.uploadMode.value;
   function uploadLabels() {
     const bulk = uploadMode() === 'bulk';
     el('gallery-files').multiple = bulk;
-    el('gallery-upload').textContent = bulk ? 'Upload selected images' : 'Upload single image';
+    el('gallery-file-prompt').textContent = bulk ? '3. Choose multiple images' : '3. Choose your image';
+    el('gallery-upload').disabled = uploading || !configured || !chosenFiles.length;
+    el('gallery-upload').textContent = bulk ? `Upload ${chosenFiles.length || 'selected'} images` : 'Upload single image';
     el('upload-destination').textContent = selected ? 'Uploading to: ' + selected.title : 'Create or choose an album before uploading.';
   }
 
+  function syncFileInput() {
+    const data = new DataTransfer(); chosenFiles.forEach(file => data.items.add(file)); el('gallery-files').files = data.files;
+  }
+  function drawFilePreviews() {
+    for (const [file, url] of previewUrls) if (!chosenFiles.includes(file)) { URL.revokeObjectURL(url); previewUrls.delete(file); }
+    el('gallery-file-previews').replaceChildren();
+    el('gallery-file-count').textContent = chosenFiles.length ? `${chosenFiles.length} image${chosenFiles.length === 1 ? '' : 's'} selected` : 'No images selected';
+    el('gallery-preview-empty').hidden = chosenFiles.length > 0; el('gallery-clear-files').hidden = !chosenFiles.length;
+    for (const file of chosenFiles) {
+      if (!previewUrls.has(file)) previewUrls.set(file, URL.createObjectURL(file));
+      const card = document.createElement('article'); card.className = 'gallery-file-preview';
+      const image = document.createElement('img'); image.src = previewUrls.get(file); image.alt = 'Selected image: ' + file.name;
+      const name = document.createElement('p'); name.textContent = file.name;
+      const size = document.createElement('small'); size.textContent = (file.size / 1024 / 1024).toFixed(2) + ' MB';
+      const remove = button('Remove image', async () => { if (uploading) return; chosenFiles = chosenFiles.filter(item => item !== file); syncFileInput(); drawFilePreviews(); });
+      remove.setAttribute('aria-label', 'Remove ' + file.name); remove.disabled = uploading;
+      card.append(image, name, size, remove); el('gallery-file-previews').append(card);
+    }
+    uploadLabels();
+  }
+  function chooseFiles(files) {
+    if (uploading) return;
+    const candidates = Array.from(files), limit = uploadMode() === 'single' ? 1 : 20;
+    const errors = [];
+    if (candidates.length > limit) errors.push(`Choose no more than ${limit} image${limit === 1 ? '' : 's'} in this mode.`);
+    for (const file of candidates) if (!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size < 16 || file.size > 10485760) errors.push(`${file.name}: choose a JPEG, PNG or WebP image up to 10 MB.`);
+    el('gallery-file-error').textContent = errors.join(' ');
+    // Preserve a valid selection when a new selection is invalid.
+    if (errors.length) { syncFileInput(); return; }
+    chosenFiles = candidates; syncFileInput(); drawFilePreviews();
+  }
+  function lockUploadControls(locked) {
+    el('gallery-files').disabled = locked; el('album-select').disabled = locked; el('album-new').disabled = locked;
+    el('gallery-clear-files').disabled = locked;
+    for (const radio of uploadForm.elements.uploadMode) radio.disabled = locked;
+    drawFilePreviews();
+  }
   const initialControls = [...form.elements, el('album-new'), el('album-select')];
   initialControls.forEach(control => { control.disabled = true; });
   function status(text) { el('gallery-upload-status').textContent = text; }
-  async function clearAlbum() { selected = standalone; uploadLabels(); form.hidden = false; form.reset(); el('album-select').value = ''; el('album-form-title').textContent = 'New album'; el('gallery-upload').disabled = !configured || uploading; await loadImages(); }
+  async function clearAlbum() { selected = standalone; uploadLabels(); form.hidden = false; form.reset(); el('album-select').value = ''; el('album-form-title').textContent = 'New album'; el('gallery-upload').disabled = !configured || uploading || !chosenFiles.length; await loadImages(); }
   async function loadAlbums(preferredId = selected?.id) {
     const data = await api('gallery/albums?page=' + albumPage + '&search=' + encodeURIComponent(search)); albums = data.items;
     el('album-select').replaceChildren(new Option('No album — standalone gallery photos', ''));
@@ -32,7 +74,7 @@
     uploadLabels();
     form.elements.title.value = selected.title; form.elements.slug.value = selected.slug; form.elements.description.value = selected.description;
     form.elements.isPublished.checked = selected.isPublished; el('album-form-title').textContent = 'Edit album';
-    el('gallery-upload').disabled = !configured || uploading; imagePage = 1; await loadImages();
+    el('gallery-upload').disabled = !configured || uploading || !chosenFiles.length; imagePage = 1; await loadImages();
   }
   function makeLabel(title, control) { const label = document.createElement('label'); label.className = 'mb-3'; label.textContent = title; label.append(control); return label; }
   async function loadImages() {
@@ -76,7 +118,7 @@
     return new Promise((resolve, reject) => {
       const request = new XMLHttpRequest(); request.open('PUT', url); request.withCredentials = false; request.timeout = 300000;
       request.setRequestHeader('Content-Type', file.type);
-      request.upload.addEventListener('progress', e => { if (e.lengthComputable) { const percent = Math.round(e.loaded / e.total * 100); el('gallery-progress').value = percent; if (item) { item.state = 'Uploading ' + percent + '%'; drawQueue(); } } });
+      request.upload.addEventListener('progress', e => { if (e.lengthComputable) { const percent = Math.round(e.loaded / e.total * 100); el('gallery-progress').value = Math.round((queue.filter(x => x.done).length + e.loaded / e.total) / queue.length * 100); if (item) { item.state = 'Uploading ' + percent + '%'; el('gallery-progress-label').textContent = `${queue.filter(x => x.done).length} of ${queue.length} uploaded · ${item.file.name}: ${percent}%`; drawQueue(); } } });
       request.addEventListener('load', () => request.status >= 200 && request.status < 300 ? resolve() : reject(new Error('The image could not be uploaded. Check the storage connection and try again.')));
       request.addEventListener('error', () => reject(new Error('The browser could not reach image storage. Check your connection; ask the developer to check the R2 bucket CORS origin, PUT permissions and browser console. Retry this photo after the cause is fixed.')));
       request.addEventListener('timeout', () => reject(new Error('The upload timed out. Try again on a stronger connection.')));
@@ -120,51 +162,61 @@
   function drawQueue() {
     el('upload-queue').replaceChildren();
     for (const item of queue) {
-      const row = document.createElement('p'); row.textContent = `${item.file.name}: ${item.state}`;
-      if (item.state.startsWith('Failed')) row.append(button('Retry photo', () => runQueue([item])));
+      const row = document.createElement('p'); row.className = item.state.startsWith('Failed') ? 'upload-result failed' : item.done ? 'upload-result success' : 'upload-result'; row.textContent = `${item.file.name}: ${item.state}`;
+      if (item.state.startsWith('Failed') && !uploading) row.append(button('Retry photo', () => runQueue([item])));
       el('upload-queue').append(row);
     }
   }
   async function runQueue(items) {
     if (uploading) throw new Error('Wait for the current upload to finish.');
-    uploading = true; el('gallery-upload').disabled = true; el('gallery-progress').hidden = false;
+    uploading = true; lockUploadControls(true); el('gallery-upload').disabled = true; el('gallery-progress').hidden = false;
     try {
       for (const item of items) {
         try {
-          item.state = 'Uploading'; drawQueue(); el('gallery-progress').value = 0;
+          item.state = 'Uploading'; item.done = false; drawQueue();
           // Reuse the record safely; a completed image is never removed by retry.
           const upload = item.uploadId
             ? await api('gallery/images/' + item.uploadId + '/retry', 'POST', {})
             : await api('gallery/uploads', 'POST', { albumId: item.albumId, fileName: item.file.name, contentType: item.file.type, size: item.file.size, altText: item.file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ') });
-          if (upload.isComplete) { item.state = 'Uploaded · draft'; item.uploadId = null; drawQueue(); continue; }
+          if (upload.isComplete) { item.state = 'Uploaded · draft'; item.done = true; item.uploadId = null; drawQueue(); continue; }
           item.uploadId = upload.id;
           await putFile(upload.uploadUrl, item.file, item);
           item.state = 'Verifying'; drawQueue();
           await api('gallery/images/' + upload.id + '/complete', 'POST', {});
-          item.state = 'Uploaded · draft'; item.uploadId = null;
+          item.state = 'Uploaded · draft'; item.done = true; item.uploadId = null;
         } catch (error) { item.state = 'Failed: ' + error.message; }
         drawQueue();
+        el('gallery-progress').value = Math.round(queue.filter(x => x.done).length / queue.length * 100);
       }
-      status('Finished processing. Uploaded photos remain drafts until you publish them. Failed photos can be retried while this page is open.');
+      const succeeded = queue.filter(item => item.done).length, failed = queue.filter(item => item.state.startsWith('Failed')).length;
+      status(`${succeeded} uploaded successfully${failed ? `; ${failed} failed — use Retry photo below` : ''}. Uploaded photos are drafts; publish them below when ready.`);
+      el('gallery-progress-label').textContent = `${succeeded} of ${queue.length} uploaded${failed ? ` · ${failed} failed` : ''}`;
       await loadAlbums();
-    } finally { uploading = false; el('gallery-upload').disabled = !configured || !selected; el('gallery-progress').hidden = true; }
+    } finally { uploading = false; lockUploadControls(false); drawQueue(); el('gallery-progress').hidden = true; }
   }
   el('gallery-upload-form').addEventListener('submit', event => {
     event.preventDefault(); perform(event.submitter, async () => {
       if (!selected || !configured) throw new Error('Choose standalone photos or save an album, and connect image storage before uploading.');
-      const files = Array.from(el('gallery-files').files);
+      const files = chosenFiles.slice();
       const limit = uploadMode() === 'single' ? 1 : 20;
       if (!files.length || files.length > limit) throw new Error(`Choose 1–${limit} photos for this upload mode.`);
       for (const file of files) if (!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size < 16 || file.size > 10485760) throw new Error(`${file.name}: choose a JPEG, PNG or WebP image up to 10 MB.`);
       if (queue.some(x => x.state.startsWith('Failed')) && !confirm('Replace the retry queue? Incomplete records can still be removed from the album.')) return;
-      queue = files.map(file => ({ file, albumId: selected.id, state: 'Waiting', uploadId: null }));
-      el('gallery-files').value = ''; await runQueue(queue);
-    });
+      queue = files.map(file => ({ file, albumId: selected.id, state: 'Waiting', uploadId: null, done: false }));
+      chosenFiles = []; syncFileInput(); drawFilePreviews(); await runQueue(queue);
+    }).finally(uploadLabels);
   });
-  for (const radio of uploadForm.elements.uploadMode) radio.addEventListener('change', () => { uploadLabels(); el('gallery-files').value = ''; });
+  el('gallery-files').addEventListener('change', event => chooseFiles(event.target.files));
+  el('gallery-clear-files').addEventListener('click', () => { if (uploading) return; chosenFiles = []; syncFileInput(); el('gallery-file-error').textContent = ''; drawFilePreviews(); });
+  for (const radio of uploadForm.elements.uploadMode) radio.addEventListener('change', () => {
+    if (uploadMode() === 'single' && chosenFiles.length > 1) { chosenFiles = chosenFiles.slice(0, 1); status('Switched to Single image. Only the first selected image was kept.'); }
+    syncFileInput(); el('gallery-file-error').textContent = ''; drawFilePreviews();
+  });
+  window.addEventListener('pageshow', event => { if (event.persisted) drawFilePreviews(); });
+  window.addEventListener('pagehide', () => { for (const url of previewUrls.values()) URL.revokeObjectURL(url); previewUrls.clear(); });
   const drop = el('gallery-upload-form');
   drop.addEventListener('dragover', event => { event.preventDefault(); });
-  drop.addEventListener('drop', event => { event.preventDefault(); if (!uploading && event.dataTransfer.files.length) { el('gallery-files').files = event.dataTransfer.files; status(`${event.dataTransfer.files.length} photos selected. Choose the upload button to continue.`); } });
+  drop.addEventListener('drop', event => { event.preventDefault(); if (!uploading && event.dataTransfer.files.length) { chooseFiles(event.dataTransfer.files); } });
   el('gallery-refresh').addEventListener('click', () => perform(el('gallery-refresh'), () => loadAlbums()));
   for (const [id, offset] of [['images-prev',-1],['images-next',1]]) el(id).addEventListener('click', () => perform(el(id), async () => { imagePage += offset; await loadImages(); }));
   for (const [id, offset] of [['albums-prev',-1],['albums-next',1]]) el(id).addEventListener('click', () => perform(el(id), async () => { albumPage += offset; await loadAlbums(); }));
