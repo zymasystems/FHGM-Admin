@@ -45,6 +45,8 @@ jobs:
       - run: python -m pip install -r Tests/requirements.txt
       - run: dotnet build FHGM-Admin.sln -c Release --nologo
       - run: node --check Frontend/wwwroot/admin/app.js && node --check Frontend/wwwroot/public/app.js && node --check Frontend/wwwroot/admin/gallery.js && node --check Frontend/wwwroot/public/gallery-widget.js && node --check Frontend/wwwroot/admin/church-content.js && node --check Frontend/wwwroot/admin/monitoring.js && node --check Frontend/wwwroot/public/church-content.js
+      - name: Verify SSH deployment reaches frontend restart and public checks
+        run: python3 Tests/deploy_stream_test.py
       - name: Check all JavaScript and operational scripts
         run: |
           find Frontend/wwwroot -name '*.js' -not -path '*/lib/*' -exec node --check {} \;
