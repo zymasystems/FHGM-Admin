@@ -160,6 +160,19 @@ public sealed class GalleryController(AppDbContext db, GalleryStorage storage, A
         return Ok(new { image.Id, image.AltText, image.Caption, image.IsPublished, image.Version });
     }
 
+    [HttpPut("images/{id:guid}/publication")]
+    public async Task<IActionResult> SetPublication(Guid id, ImagePublicationRequest request)
+    {
+        var image = await db.GalleryImages.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
+        if (image is null) return NotFound();
+        if (!image.IsComplete) return Conflict(new { message = "Complete the upload before publishing it." });
+        if (image.Version != request.Version) return Conflict(new { message = "This photo changed. Refresh the gallery before trying again." });
+        image.IsPublished = request.IsPublished; image.Version++;
+        audit.Record(image.IsPublished ? "ImagePublished" : "ImageUnpublished", "GalleryImage", id.ToString());
+        await db.SaveChangesAsync();
+        return Ok(new { image.Id, image.IsPublished, image.Version });
+    }
+
     [HttpDelete("images/{id:guid}")]
     public async Task<IActionResult> DeleteImage(Guid id)
     {

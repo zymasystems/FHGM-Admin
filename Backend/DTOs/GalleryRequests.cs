@@ -15,3 +15,5 @@ public sealed record ImageUpdateRequest(
     [Required, MaxLength(300)] string AltText,
     [MaxLength(1000)] string Caption, bool IsPublished, int Version);
 
+
+public sealed record ImagePublicationRequest(bool IsPublished, int Version);

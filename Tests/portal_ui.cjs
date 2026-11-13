@@ -114,7 +114,7 @@ const assert = require('node:assert/strict');
  await page.waitForFunction(() => document.querySelector('#upload-queue').textContent.includes('Uploaded · draft'));
  await page.waitForFunction(() => document.querySelectorAll('#gallery-images article').length === 1);
  await page.locator('#select-photos').click(); await page.locator('#publish-photos').click();
- await page.waitForFunction(() => document.querySelector('#gallery-images').textContent.includes('Published photo'));
+ await page.waitForFunction(() => document.querySelector('#gallery-images').textContent.includes('Published'));
  await page.getByRole('button',{name:'Use as album cover'}).click();
  await page.waitForFunction(() => document.querySelector('#gallery-images').textContent.includes('Current album cover'));
  // Bulk upload with an album: both files must keep the chosen album ID.
@@ -157,6 +157,49 @@ const assert = require('node:assert/strict');
  await page.locator('#gallery-upload').click();
  await page.waitForFunction(() => document.querySelectorAll('#gallery-images article').length === 1);
  assert.equal(uploads.at(-1).albumId, null);
+ const singleCard = page.locator('#gallery-images article').filter({hasText:'standalone-single.png'});
+ assert.equal(await singleCard.locator('.gallery-publication-status').textContent(), 'Unpublished');
+ let publicationRequests = 0, failPublication = true;
+ await page.route('**/api/gallery/images/*/publication', async route => {
+   publicationRequests++; await new Promise(resolve => setTimeout(resolve, 350));
+   if (failPublication) { failPublication = false; await route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({message:'Test publication failure'})}); }
+   else await route.continue();
+ });
+ await singleCard.getByRole('button',{name:'Publish',exact:true}).click();
+ await page.waitForFunction(() => document.querySelector('#notice').textContent.includes('Test publication failure'));
+ await singleCard.getByRole('button',{name:'Publish',exact:true}).waitFor({state:'visible'});
+ assert.equal(await singleCard.locator('.gallery-publication-status').textContent(), 'Unpublished');
+ await singleCard.getByRole('button',{name:'Publish',exact:true}).click();
+ assert.equal(await singleCard.getByRole('button',{name:'Publishing…',exact:true}).isDisabled(), true);
+ await singleCard.getByRole('button',{name:'Publishing…',exact:true}).evaluate(button => { button.click(); button.click(); });
+ await singleCard.getByRole('button',{name:'Unpublish',exact:true}).waitFor({state:'visible'});
+ assert.equal(publicationRequests, 2);
+ assert.equal(await singleCard.locator('.gallery-publication-status').textContent(), 'Published');
+ let visiblePhotos = await page.request.get(base + '/api/public/gallery/images');
+ assert.ok((await visiblePhotos.json()).items.some(item => item.altText === 'standalone single'));
+ await singleCard.getByRole('button',{name:'Unpublish',exact:true}).click();
+ assert.equal(await singleCard.getByRole('button',{name:'Unpublishing…',exact:true}).isDisabled(), true);
+ await singleCard.getByRole('button',{name:'Publish',exact:true}).waitFor({state:'visible'});
+ visiblePhotos = await page.request.get(base + '/api/public/gallery/images');
+ assert.ok(!(await visiblePhotos.json()).items.some(item => item.altText === 'standalone single'));
+ assert.equal(publicationRequests, 3);
+ await page.unroute('**/api/gallery/images/*/publication');
+ await page.reload();
+ await singleCard.getByRole('button',{name:'Publish',exact:true}).waitFor({state:'visible'});
+ assert.equal(await singleCard.locator('.gallery-publication-status').textContent(), 'Unpublished');
+ const retainedPhoto = await page.request.get(base + '/api/gallery/images');
+ assert.equal((await retainedPhoto.json()).items.length, 1);
+ // Cards and controls remain inside the viewport at desktop, tablet and phone widths.
+ for (const width of [1280, 820, 390]) {
+   await page.setViewportSize({width,height:1000});
+   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+   const box = await singleCard.boundingBox();
+   for (const button of await singleCard.locator('.gallery-card-actions button').all()) {
+     const b = await button.boundingBox(); assert.ok(b.x >= box.x && b.x + b.width <= box.x + box.width + 1);
+   }
+   await page.screenshot({path:`test-results/gallery-card-${width}.png`,fullPage:true});
+ }
+ await page.setViewportSize({width:1280,height:1000});
  await page.locator('[name=uploadMode][value=bulk]').check();
  assert.notEqual(await page.locator('#gallery-files').getAttribute('multiple'), null);
  await page.locator('#gallery-files').setInputFiles([
@@ -174,7 +217,7 @@ const assert = require('node:assert/strict');
  assert.match(await page.locator('#gallery-progress-label').textContent(), /2 of 2 uploaded/);
  assert.equal(await page.locator('#gallery-upload').isDisabled(), true);
  await page.locator('#select-photos').click(); await page.locator('#publish-photos').click();
- await page.waitForFunction(() => Array.from(document.querySelectorAll('#gallery-images .badge')).every(x => x.textContent === 'Published photo'));
+ await page.waitForFunction(() => Array.from(document.querySelectorAll('#gallery-images .badge')).every(x => x.textContent === 'Published'));
  assert.ok(peakPuts >= 2 && peakPuts <= 3, 'Bulk files should upload concurrently within the worker limit');
  // A clicked photo opens its own editor, and saving must not affect its neighbours.
  await page.getByRole('button',{name:'Edit photo: standalone single',exact:true}).click();
