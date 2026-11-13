@@ -1,9 +1,9 @@
 @model DashboardViewModel
-@{ ViewData["Title"] = "Content studio"; ViewData["ActiveView"] = Model.ActiveView; }
+@{ ViewData["Title"] = Model.ActiveView switch { "blogs" => "Blog articles", "gallery" => "Photo gallery", "users" => "Team members", "audit" => "Activity log", "events" => "Events", "popups" => "Announcements", "monitoring" => "Monitoring", _ => "Overview" }; ViewData["ActiveView"] = Model.ActiveView; }
 <div id="workspace" class="workspace">
     <partial name="_Sidebar" />
-    <main class="main">
-        <header class="topbar"><span class="topbar-brand">FOR HIS GRACE MINISTRIES <span>/</span> ADMIN WORKSPACE</span><span class="status-dot">Content studio</span></header>
+    <main class="main" id="main-content" tabindex="-1">
+        <partial name="_PortalTopbar" />
         <div id="notice" role="status" aria-live="polite"></div>
         @switch (Model.ActiveView)
         {
@@ -40,7 +40,7 @@
                         @if (User.IsInRole("SuperAdmin") || User.IsInRole("ChurchAdmin") || User.IsInRole("MediaManager"))
                         {
                             <a class="dashboard-action-card" asp-action="Gallery">
-                                <span class="dashboard-action-icon" aria-hidden="true">▧</span>
+                                <span class="dashboard-action-icon" aria-hidden="true"><partial name="_Icon" model='"gallery"' /></span>
                                 <span><strong>Photo gallery</strong><small>Organize albums and share ministry moments.</small></span>
                                 <span class="dashboard-arrow" aria-hidden="true">↗</span>
                             </a>
@@ -48,7 +48,7 @@
                         @if (User.IsInRole("SuperAdmin") || User.IsInRole("ChurchAdmin") || User.IsInRole("Writer") || User.IsInRole("BlogEditor"))
                         {
                             <a class="dashboard-action-card" asp-action="Blogs">
-                                <span class="dashboard-action-icon" aria-hidden="true">✎</span>
+                                <span class="dashboard-action-icon" aria-hidden="true"><partial name="_Icon" model='"blogs"' /></span>
                                 <span><strong>Blog articles</strong><small>Write, review and publish stories of faith.</small></span>
                                 <span class="dashboard-arrow" aria-hidden="true">↗</span>
                             </a>
@@ -56,13 +56,13 @@
                         @if (User.IsInRole("SuperAdmin") || User.IsInRole("ChurchAdmin") || User.IsInRole("CommunicationsManager"))
                         {
                             <a class="dashboard-action-card" asp-action="Events">
-                                <span class="dashboard-action-icon" aria-hidden="true">▦</span>
+                                <span class="dashboard-action-icon" aria-hidden="true"><partial name="_Icon" model='"events"' /></span>
                                 <span><strong>Events & announcements</strong><small>Keep your church family up to date.</small></span>
                                 <span class="dashboard-arrow" aria-hidden="true">↗</span>
                             </a>
                         }
                         <a class="dashboard-action-card" href="/account/security">
-                            <span class="dashboard-action-icon" aria-hidden="true">◇</span>
+                            <span class="dashboard-action-icon" aria-hidden="true"><partial name="_Icon" model='"security"' /></span>
                             <span><strong>Account security</strong><small>Review your password and sign-in protection.</small></span>
                             <span class="dashboard-arrow" aria-hidden="true">↗</span>
                         </a>

@@ -1,6 +1,6 @@
-@{ ViewData["Title"] = "Password & security"; }
-<main class="container py-5" id="security-page">
-  <a href="/admin/">← Back to portal</a><h1>Password & security</h1>
+@{ ViewData["Title"] = "Password & security"; ViewData["ActiveView"] = "security"; }
+<div id="workspace" class="workspace"><partial name="_Sidebar" /><main class="main" id="main-content" tabindex="-1"><partial name="_PortalTopbar" /><div id="security-page" class="account-security">
+<div class="page-heading"><div><p class="eyebrow">YOUR ACCOUNT</p><h1>Password & security</h1><p class="muted">Manage your password and strengthen your sign-in protection.</p></div></div>
   <p id="security-status" role="status" aria-live="polite"></p><p id="notice" role="alert"></p>
   <form id="password-change" class="panel p-4"><h2>Change password</h2>
     <label>Current password<input name="currentPassword" type="password" autocomplete="current-password" required class="form-control"></label>
@@ -17,7 +17,7 @@
     <button type="button" class="btn outline" id="mfa-disable">Disable authenticator</button>
     <pre id="mfa-recovery" class="text-wrap" aria-live="polite"></pre>
   </form>
-</main>
+</div></main></div>
 @section Scripts {
 <script src="~/admin/app.js" asp-append-version="true" defer></script>
 <script src="~/admin/security.js" asp-append-version="true" defer></script>

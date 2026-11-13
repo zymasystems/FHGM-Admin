@@ -9,9 +9,12 @@
     <link rel="stylesheet" href="~/lib/bootstrap/bootstrap.min.css">
     <link rel="stylesheet" href="~/shared/styles.css" asp-append-version="true">
     <link rel="stylesheet" href="~/shared/ministry.css" asp-append-version="true">
+    <link rel="stylesheet" href="~/shared/portal.css" asp-append-version="true">
+    <script src="~/shared/portal.js" asp-append-version="true" defer></script>
     <script src="~/lib/bootstrap/bootstrap.bundle.min.js" defer></script>
 </head>
 <body data-view="@ViewData["ActiveView"]">
+    <a class="portal-skip" href="#main-content">Skip to main content</a>
     @RenderBody()
     @await RenderSectionAsync("Scripts", required: false)
 </body>
