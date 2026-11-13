@@ -69,6 +69,22 @@ bad = media.request("/api/gallery/uploads", "POST", {**upload_body, "fileName": 
 put(bad["uploadUrl"], b"<script>bad()</script>".ljust(len(valid), b" "))
 media.request("/api/gallery/images/" + bad["id"] + "/complete", "POST", {}, expected=400)
 media.request("/api/gallery/images/" + bad["id"], "DELETE", {}, expected=202)
+# Dedicated status mutations preserve description/caption/album and enforce versions/roles.
+photo = media.request('/api/gallery/uploads', 'POST', {**upload_body, 'albumId':None, 'fileName':'publication.png'}, expected=201)
+put(photo['uploadUrl'], valid)
+completed = media.request('/api/gallery/images/'+photo['id']+'/complete','POST',{})
+publication_path = '/api/gallery/images/'+photo['id']+'/publication'
+writer.request(publication_path,'PUT',{'isPublished':True,'version':completed['version']},expected=403)
+state = media.request(publication_path,'PUT',{'isPublished':True,'version':completed['version']})
+assert state['isPublished'] is True
+media.request(publication_path,'PUT',{'isPublished':False,'version':completed['version']},expected=409)
+assert any(item['altText'] == upload_body['altText'] for item in public.request('/api/public/gallery/images')['items'])
+state = media.request(publication_path,'PUT',{'isPublished':False,'version':state['version']})
+assert state['isPublished'] is False
+retained = next(item for item in media.request('/api/gallery/images')['items'] if item['id'] == photo['id'])
+assert retained['altText'] == upload_body['altText'] and retained['caption'] == '' and not retained['isPublished']
+assert not any(item['altText'] == upload_body['altText'] for item in public.request('/api/public/gallery/images')['items'])
+media.request('/api/gallery/images/'+photo['id'],'DELETE',expected=202)
 actions = admin.request("/api/audit")["items"]
 assert any(a["action"] == "ImageUploadCompleted" for a in actions)
 assert any(a["action"] == "ImageRemoved" for a in actions)

@@ -10,6 +10,7 @@
   const uploadForm = el('gallery-upload-form');
   let chosenFiles = [];
   const previewUrls = new Map();
+  const publishingIds = new Set();
   const uploadMode = () => uploadForm.elements.uploadMode.value;
   function uploadLabels() {
     const bulk = uploadMode() === 'bulk';
@@ -99,6 +100,34 @@
       finally { savingImage = false; el('gallery-editor-save').textContent = 'Save photo'; }
     });
   });
+  async function setPhotoPublication(image, control, card) {
+    if (publishingIds.has(image.id)) return;
+    publishingIds.add(image.id);
+    const next = !image.isPublished;
+    card.querySelectorAll('button,input').forEach(item => { item.disabled = true; });
+    control.textContent = next ? 'Publishing…' : 'Unpublishing…'; card.setAttribute('aria-busy', 'true');
+    try {
+      const result = await api('gallery/images/' + image.id + '/publication', 'PUT', {isPublished:next,version:image.version});
+      Object.assign(image, result); publishingIds.delete(image.id);
+      await loadImages();
+      notice(next ? selected?.id && !selected.isPublished ? 'Photo published. Publish its album too before it appears on the website.' : 'Photo published on the website.' : 'Photo unpublished. It is hidden from the website and remains in your gallery.');
+    } catch (error) { notice(error.message, true); }
+    finally {
+      publishingIds.delete(image.id); card.removeAttribute('aria-busy');
+      card.querySelectorAll('button,input').forEach(item => { item.disabled = false; });
+      control.textContent = image.isPublished ? 'Unpublish' : 'Publish';
+      // A refresh during the request may have replaced this card; unlock that copy too.
+      const visibleCard = el('gallery-images').querySelector(`[data-image-id="${image.id}"]`);
+      if (visibleCard) {
+        visibleCard.querySelectorAll('button,input').forEach(item => { item.disabled = false; });
+        const latest = imageItems.find(item => item.id === image.id) || image;
+        if (latest.version < image.version) Object.assign(latest, image);
+        const toggle = visibleCard.querySelector('.gallery-publication-button'), badge = visibleCard.querySelector('.gallery-publication-status');
+        if (toggle) { toggle.textContent = latest.isPublished ? 'Unpublish' : 'Publish'; toggle.classList.toggle('is-publish', !latest.isPublished); toggle.classList.toggle('is-unpublish', latest.isPublished); }
+        if (badge) { badge.textContent = latest.isPublished ? 'Published' : 'Unpublished'; badge.classList.toggle('is-published', latest.isPublished); badge.classList.toggle('is-unpublished', !latest.isPublished); }
+      }
+    }
+  }
   async function loadImages() {
     if (!selected) return;
     el('gallery-images-title').textContent = selected.title;
@@ -111,23 +140,34 @@
     el('gallery-images').replaceChildren(); el('gallery-empty').hidden = data.total !== 0;
     el('images-page').textContent = `Page ${imagePage} · ${data.total} photos`; el('images-prev').disabled = imagePage <= 1; el('images-next').disabled = imagePage * 24 >= data.total;
     for (const image of data.items) {
-      const card = document.createElement('article'); card.className = 'gallery-image-card';
+      const card = document.createElement('article'); card.className = 'gallery-image-card'; card.dataset.imageId = image.id;
       if (image.isComplete) { const img = document.createElement('img'); img.src = image.url; img.alt = image.altText || image.fileName; img.loading = 'lazy';
         const open = button('', async () => openImageEditor(image)); open.className = 'gallery-photo-open'; open.setAttribute('aria-label','Edit photo: ' + (image.altText || image.fileName)); open.append(img); card.append(open); }
-      const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.setAttribute('aria-label', 'Select ' + image.fileName);
-      checkbox.addEventListener('change', () => { checkbox.checked ? selectedIds.add(image.id) : selectedIds.delete(image.id); selectionStatus(); }); card.append(checkbox);
-      const state = document.createElement('p'); state.className = 'badge'; state.textContent = !image.isComplete ? 'Upload incomplete' : image.isPublished ? 'Published photo' : 'Draft photo'; card.append(state);
-      const content = document.createElement('div'); content.className = 'p-3'; const name = document.createElement('p'); name.className = 'small fw-semibold'; name.textContent = image.fileName; content.append(name);
+      const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.dataset.selectPhoto = 'true'; checkbox.setAttribute('aria-label', 'Select ' + image.fileName);
+      checkbox.addEventListener('change', () => { checkbox.checked ? selectedIds.add(image.id) : selectedIds.delete(image.id); selectionStatus(); });
+      const selection = document.createElement('label'); selection.className = 'gallery-card-select'; const selectionText = document.createElement('span'); selectionText.textContent = 'Select photo'; selection.append(checkbox, selectionText);
+      const state = document.createElement('p'); state.className = 'badge gallery-publication-status ' + (image.isPublished ? 'is-published' : 'is-unpublished'); state.textContent = !image.isComplete ? 'Upload incomplete' : image.isPublished ? 'Published' : 'Unpublished';
+      const meta = document.createElement('div'); meta.className = 'gallery-card-meta'; meta.append(selection, state); card.append(meta);
+      const content = document.createElement('div'); content.className = 'gallery-card-content'; const name = document.createElement('p'); name.className = 'gallery-card-name'; name.title = image.fileName; name.textContent = image.fileName; content.append(name);
       if (image.isComplete) {
-        const description = document.createElement('p'); description.className = 'small muted'; description.textContent = image.altText; content.append(description, button('Edit photo', async () => openImageEditor(image)));
-        if (image.isPublished && selected.id) content.append(button(selected.coverImageId === image.id ? 'Current album cover' : 'Use as album cover', async () => {
+        const description = document.createElement('p'); description.className = 'gallery-card-description muted'; description.textContent = image.altText; description.title = image.altText; content.append(description);
+        if (image.isPublished && selected.id && !selected.isPublished) { const hidden = document.createElement('p'); hidden.className = 'gallery-album-hidden small'; hidden.textContent = 'Hidden publicly until this album is published.'; content.append(hidden); }
+        if (image.isPublished && selected.id) { const cover = button(selected.coverImageId === image.id ? 'Current album cover' : 'Use as album cover', async () => {
           await api('gallery/albums/' + selected.id, 'PUT', { ...selected, coverImageId: image.id }); await loadAlbums(); notice('Album cover updated.');
-        }));
+        }); cover.classList.add('gallery-cover-action'); content.append(cover); }
       } else {
         const note = document.createElement('p'); note.className = 'small muted'; note.textContent = 'Upload not completed. If the file finished uploading, retry completion. Otherwise remove it and select the image again.'; content.append(note);
         content.append(button('Finish upload', async () => { await api('gallery/images/' + image.id + '/complete', 'POST', {}); await loadImages(); }));
       }
-      const remove = button('Remove photo', async () => { if (!confirm('Remove this photo from the gallery?')) return; await api('gallery/images/' + image.id, 'DELETE', {}); await loadImages(); notice('Photo removed from the gallery.'); }); remove.classList.add('mt-3'); content.append(remove); card.append(content); el('gallery-images').append(card);
+      const actions = document.createElement('div'); actions.className = 'gallery-card-actions';
+      if (image.isComplete) {
+        actions.append(button('Edit photo', async () => openImageEditor(image)));
+        const publication = button(image.isPublished ? 'Unpublish' : 'Publish', async () => setPhotoPublication(image, publication, card));
+        publication.classList.add('gallery-publication-button', image.isPublished ? 'is-unpublish' : 'is-publish');
+        actions.append(publication);
+      }
+      const remove = button('Remove photo', async () => { if (!confirm('Remove this photo from the gallery?')) return; await api('gallery/images/' + image.id, 'DELETE', {}); await loadImages(); notice('Photo removed from the gallery.'); }); remove.classList.add('gallery-remove-button'); actions.append(remove); content.append(actions); card.append(content);
+      if (publishingIds.has(image.id)) card.querySelectorAll('button,input').forEach(item => { item.disabled = true; }); el('gallery-images').append(card);
     }
   }
   function putFile(url, file, item) {
@@ -154,7 +194,7 @@
   el('album-search-form').addEventListener('submit', event => { event.preventDefault(); search = el('album-search').value.trim(); albumPage = 1; perform(event.submitter, () => loadAlbums(null)); });
   el('select-photos').addEventListener('click', () => {
     const select = selectedIds.size !== imageItems.length; selectedIds = new Set(select ? imageItems.map(x => x.id) : []);
-    el('gallery-images').querySelectorAll('article > input[type=checkbox]').forEach(x => { x.checked = select; }); selectionStatus();
+    el('gallery-images').querySelectorAll('input[data-select-photo]').forEach(x => { x.checked = select; }); selectionStatus();
   });
   for (const [id, action] of [['publish-photos', 'publish'], ['unpublish-photos', 'unpublish'], ['remove-photos', 'remove']]) {
     el(id).addEventListener('click', () => perform(el(id), async () => {
