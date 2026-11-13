@@ -265,3 +265,13 @@ Browser checks exercise the actual file-chooser event, assert multiple selection
 Each completed image card has Edit photo, Publish/Unpublish and Remove photo controls in an aligned action row. Cards use a consistent image area, selection/status row and bounded name/description text. The status button shows processing feedback and locks card controls to prevent duplicate requests. Publication uses the existing IsPublished column through the role-protected `PUT /api/gallery/images/{id}/publication` endpoint with the current version. It changes only publication status/version, records an audit action and preserves descriptions, storage objects and album associations. No database migration is needed.
 
 Unpublished photos remain in the admin gallery but are excluded from public feeds. Album photos still require a published album; the card and notification explain this when a published image belongs to a hidden album. Browser tests cover publish/unpublish visibility, persistence after refresh, duplicate-click prevention and responsive card/control bounds at desktop/tablet/mobile widths.
+
+## Shared portal visual system
+
+All Razor pages load `shared/portal.css` and `shared/portal.js` after the existing Bootstrap/ministry layers. The shared design tokens preserve FHGM gold/ivory/forest branding while standardizing surfaces, spacing, typography, buttons, form fields, tables, status badges, dialogs and feedback. `_Icon` and `ui-icons.svg` provide a dependency-free line-icon set; `_PortalTopbar` provides consistent breadcrumbs/navigation controls. Existing role-based sidebar links and routes are retained.
+
+Below 1024px navigation becomes an accessible drawer with an overlay, inert closed navigation, focus containment, Escape-to-close and focus return. Tables retain native semantics and scroll within labelled focusable regions. Reduced-motion preferences are respected. Security shares the admin shell; login/recovery remain public account pages.
+
+`PortalUI.confirm` provides one asynchronous confirmation dialog for existing destructive/publication/close actions. `notice`, `perform` and dynamic action-button decoration share consistent feedback and loading styles. Dashboard workload meters use only the existing API counts. No backend business logic, permissions, schema, donation/volunteer modules or chart dependencies are introduced.
+
+The browser suite audits all existing admin pages at desktop/tablet/mobile widths, menu keyboard behavior, overflow, preview/photo dialogs, confirmation cancellation, existing CRUD/publication workflows and uncaught JavaScript errors. Responsive screenshots are included in the CI artifact.

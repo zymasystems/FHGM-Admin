@@ -24,7 +24,7 @@
       for (const item of items) {
         const row = document.createElement('tr'); cell(row, item.title); cell(row, state(item)); cell(row, date(item.startsAt)); cell(row, date(item.endsAt));
         const actions = cell(row, ''); actions.append(button('Edit', async () => edit(await api(`${kind}/${item.id}`))), document.createTextNode(' '), button('Delete', async () => {
-          if (!confirm(`Delete this ${noun}? This removes it from the website and dashboard.`)) return;
+          if (!await PortalUI.confirm(`Delete this ${noun}? This removes it from the website and dashboard.`)) return;
           await api(`${kind}/${item.id}?version=${item.version}`, 'DELETE'); if (selected?.id === item.id) reset(); await load(); notice(`${noun[0].toUpperCase() + noun.slice(1)} deleted.`);
         }));
         if (kind === 'events') {

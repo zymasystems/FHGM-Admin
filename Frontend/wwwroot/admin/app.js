@@ -10,7 +10,11 @@ const isBlogTeam = () => me.roles.some(r => ['SuperAdmin', 'ChurchAdmin', 'BlogE
 const blogStatus = value => value === 'Submitted' ? 'Pending Review' : label(value);
 const date = value => value ? new Date(value).toLocaleString() : '—';
 const label = value => value === 'SuperAdmin' ? 'Developer Super Admin' : value.replace(/([a-z])([A-Z])/g, '$1 $2');
-function notice(message, error = false) { $('notice').textContent = message; $('notice').className = error ? 'error' : ''; }
+function notice(message, error = false) {
+  const root = $('notice'); if (!root) return; root.replaceChildren(); root.className = error ? 'error' : ''; root.setAttribute('role',error ? 'alert' : 'status');
+  if (!message) return; const text = document.createElement('span'); text.textContent = message; const dismiss = document.createElement('button'); dismiss.type = 'button'; dismiss.className = 'icon-button notice-close'; dismiss.setAttribute('aria-label','Dismiss notification'); dismiss.append(PortalUI.icon('close')); dismiss.addEventListener('click', () => root.replaceChildren());
+  root.append(PortalUI.icon(error ? 'alert' : 'check'),text,dismiss);
+}
 async function token() { const r = await fetch('/api/auth/csrf', { credentials: 'same-origin' }); if (!r.ok) throw new Error('Could not establish a secure session.'); csrf = (await r.json()).token; }
 async function api(path, method = 'GET', body) {
   const headers = { 'Accept': 'application/json' };
@@ -26,15 +30,15 @@ async function api(path, method = 'GET', body) {
 }
 function showLogin() { location.assign('/account/login'); }
 async function showWorkspace() {
-  if (me.mustChangePassword) { location.assign('/account/security'); return; }
+  if (me.mustChangePassword && !location.pathname.startsWith('/account/security')) { location.assign('/account/security'); return; }
   if ($('identity')) $('identity').textContent = me.displayName + '\n' + me.roles.map(label).join(', ');
   document.querySelectorAll('.nav-item').forEach(link => link.classList.toggle('selected', link.pathname === location.pathname));
   await token();
   if (['blogs','users','audit'].includes(activeView)) await loadView();
 }
 function cell(row, value) { const td = document.createElement('td'); td.textContent = value ?? ''; row.append(td); return td; }
-function button(text, handler) { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-outline-secondary outline'; b.textContent = text; b.addEventListener('click', () => perform(b, handler)); return b; }
-async function perform(target, action) { target.disabled = true; try { await action(); } catch (error) { notice(error.message, true); } finally { target.disabled = false; } }
+function button(text, handler) { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-outline-secondary outline'; b.textContent = text; PortalUI.decorateButton(b); b.addEventListener('click', () => perform(b, handler)); return b; }
+async function perform(target, action) { target.disabled = true; target.dataset.busy = 'true'; target.setAttribute('aria-busy','true'); try { await action(); } catch (error) { notice(error.message, true); } finally { target.disabled = false; delete target.dataset.busy; target.removeAttribute('aria-busy'); } }
 function pagination(prefix, data, size) { $(prefix + '-page').textContent = `Page ${data.page} · ${data.total} records`; $(prefix + '-prev').disabled = data.page <= 1; $(prefix + '-next').disabled = data.page * size >= data.total; }
 async function loadView() {
   if (activeView === 'blogs') {
@@ -50,7 +54,7 @@ async function loadView() {
         if (post.status !== 'Published') actions.append(button('Publish', async () => { await openEditor(post.id); showBlogPreview(); $('editor-error').textContent = 'Review the website preview, then choose Publish reviewed article below.'; }));
         if (post.status === 'Published') actions.append(button('Unpublish', () => listTransition(post, 'unpublish')));
         if (post.status !== 'Archived') actions.append(button('Archive', () => listTransition(post, 'archive')));
-        const remove = button('Delete blog', async () => { if (!confirm(`Permanently delete “${post.title}”? This cannot be undone and removes it from the website.`)) return; await api('blog/' + post.id + '?version=' + post.version, 'DELETE'); await loadView(); notice('Article deleted.'); });
+        const remove = button('Delete blog', async () => { if (!await PortalUI.confirm(`Permanently delete “${post.title}”? This cannot be undone and removes it from the website.`)) return; await api('blog/' + post.id + '?version=' + post.version, 'DELETE'); await loadView(); notice('Article deleted.'); });
         remove.classList.add('blog-delete'); actions.append(remove);
       }
       if (post.status === 'Published') { const view = document.createElement('a'); view.href = 'https://hisgraceministries.co.za/blog-post.html?slug=' + encodeURIComponent(post.slug); view.target = '_blank'; view.rel = 'noopener'; view.textContent = ' View on website'; actions.append(view); } $('blog-rows').append(tr);
@@ -60,7 +64,7 @@ async function loadView() {
     const data = await api('users?page=' + pages.users); $('user-rows').replaceChildren();
     for (const user of data.items) {
       const tr = document.createElement('tr'); cell(tr, user.displayName); cell(tr, user.email); cell(tr, user.roles.map(label).join(', ')); cell(tr, user.isActive ? 'Active' : 'Disabled'); const td = cell(tr, '');
-      if (user.id !== me.id && !user.roles.includes('SuperAdmin')) td.append(button(user.isActive ? 'Disable' : 'Enable', async () => { if (!confirm(`${user.isActive ? 'Disable' : 'Enable'} access for ${user.displayName}?`)) return; await api('users/' + encodeURIComponent(user.id) + '/active', 'PUT', { isActive: !user.isActive }); await loadView(); }));
+      if (user.id !== me.id && !user.roles.includes('SuperAdmin')) td.append(button(user.isActive ? 'Disable' : 'Enable', async () => { if (!await PortalUI.confirm(`${user.isActive ? 'Disable' : 'Enable'} access for ${user.displayName}?`)) return; await api('users/' + encodeURIComponent(user.id) + '/active', 'PUT', { isActive: !user.isActive }); await loadView(); }));
       $('user-rows').append(tr);
     }
     pagination('user', data, 25);
@@ -71,7 +75,7 @@ async function loadView() {
   }
 }
 async function listTransition(post, action) {
-  if (!confirm(`${action === 'unpublish' ? 'Unpublish' : 'Archive'} “${post.title}”? It will no longer appear on the public website.`)) return;
+  if (!await PortalUI.confirm(`${action === 'unpublish' ? 'Unpublish' : 'Archive'} “${post.title}”? It will no longer appear on the public website.`)) return;
   await api('blog/' + post.id + '/workflow', 'POST', {action, version:post.version});
   await loadView(); notice(action === 'unpublish' ? 'Article unpublished and saved as a draft.' : 'Article archived.');
 }
@@ -108,8 +112,8 @@ async function openEditor(id) {
         let note = '';
         if (['request-changes','reject'].includes(action)) { note = prompt('Add a review note for the writer:'); if (note === null) return; }
         if (action === 'publish' && isBlogAdmin() && reviewedVersion !== current.version) { showBlogPreview(); return; }
-        if (['unpublish','archive'].includes(action) && !confirm('Remove this article from the public website?')) return;
-        if (action === 'publish' && !confirm('Publish this article on the public website?')) return;
+        if (['unpublish','archive'].includes(action) && !await PortalUI.confirm('Remove this article from the public website?')) return;
+        if (action === 'publish' && !await PortalUI.confirm('Publish this article on the public website?')) return;
         try { await api('blog/' + current.id + '/workflow', 'POST', { action, version: current.version, note, reviewed: reviewedVersion === current.version }); const articleId = current.id; await openEditor(articleId); await loadView(); if (action === 'publish') { $('blog-feedback').textContent = 'Article published successfully. The reviewed version is now visible on the website.'; notice('Article published successfully.'); } } catch (error) { $('editor-error').textContent = error.message; }
       }));
     }
@@ -117,20 +121,20 @@ async function openEditor(id) {
   if (!$('editor').open) $('editor').showModal();
 }
 $('login-form')?.addEventListener('submit', async event => {
-  event.preventDefault(); const submit = event.submitter; submit.disabled = true; $('login-error').textContent = '';
-  try { await token(); me = await api('auth/login', 'POST', Object.fromEntries(new FormData(event.target))); location.assign(me.mustChangePassword ? '/account/security' : event.target.dataset.returnUrl || '/admin/'); } catch (error) { $('login-error').textContent = error.message; } finally { submit.disabled = false; }
+  event.preventDefault(); const submit = event.submitter; submit.disabled = true; submit.dataset.busy = 'true'; $('login-error').textContent = '';
+  try { await token(); me = await api('auth/login', 'POST', Object.fromEntries(new FormData(event.target))); location.assign(me.mustChangePassword ? '/account/security' : event.target.dataset.returnUrl || '/admin/'); } catch (error) { $('login-error').textContent = error.message; } finally { submit.disabled = false; delete submit.dataset.busy; }
 });
 $('logout')?.addEventListener('click', () => perform($('logout'), async () => { await api('auth/logout','POST',{}); me = null; showLogin(); }));
 $('delete-current-blog')?.addEventListener('click', () => perform($('delete-current-blog'), async () => {
   if (savingBlog) throw new Error('Wait for the draft to finish saving.');
-  if (!current || !confirm(`Permanently delete “${current.title}”? This also removes it from the public website.`)) return;
+  if (!current || !await PortalUI.confirm(`Permanently delete “${current.title}”? This also removes it from the public website.`)) return;
   clearTimeout(autosaveTimer);
   await api('blog/' + current.id + '?version=' + current.version, 'DELETE');
   editorGeneration++; current = null; $('editor').close(); await loadView(); notice('Article deleted.');
 }));
 $('new-blog')?.addEventListener('click', () => perform($('new-blog'), () => openEditor()));
-$('close-editor')?.addEventListener('click', () => { if (confirm('Close the editor? Unsaved changes will be lost.')) $('editor').close(); });
-$('editor')?.addEventListener('cancel', event => { if ($('blog-form').hidden) return; if (!confirm('Close the editor? Unsaved changes will be lost.')) event.preventDefault(); });
+$('close-editor')?.addEventListener('click', async () => { if (await PortalUI.confirm('Close the editor? Unsaved changes will be lost.')) $('editor').close(); });
+$('editor')?.addEventListener('cancel', async event => { if ($('blog-form').hidden) return; event.preventDefault(); if (await PortalUI.confirm('Close the editor? Unsaved changes will be lost.')) $('editor').close(); });
 async function saveBlog(automatic = false) {
   const form = $('blog-form');
   if (savingBlog || form.elements.title.disabled || !form.checkValidity() || automatic && autosaveBlocked) return;

@@ -3,14 +3,14 @@
   try {
     const data = await api('dashboard'); root.replaceChildren();
     for (const [key, title, href, detail, icon] of [
-      ['drafts','Articles to finish','/admin/blogs','Drafts and requested changes','✎'],
-      ['awaitingReview','Awaiting review','/admin/blogs','Submitted articles','◷'],
-      ['unpublishedPhotos','Photos to publish','/admin/gallery','Completed gallery uploads','▧'],
-      ['incompleteUploads','Incomplete uploads','/admin/gallery','Uploads that need attention','↥']
+      ['drafts','Articles to finish','/admin/blogs','Drafts and requested changes','blogs'],
+      ['awaitingReview','Awaiting review','/admin/blogs','Submitted articles','clock'],
+      ['unpublishedPhotos','Photos to publish','/admin/gallery','Completed gallery uploads','gallery'],
+      ['incompleteUploads','Incomplete uploads','/admin/gallery','Uploads that need attention','upload']
     ]) {
       if (data[key] == null) continue;
       const card = document.createElement('a'); card.className = 'dashboard-stat-card'; card.href = href;
-      const iconNode = document.createElement('span'); iconNode.className = 'dashboard-stat-icon'; iconNode.setAttribute('aria-hidden', 'true'); iconNode.textContent = icon;
+      const iconNode = document.createElement('span'); iconNode.className = 'dashboard-stat-icon'; iconNode.setAttribute('aria-hidden', 'true'); iconNode.append(PortalUI.icon(icon));
       const count = document.createElement('strong'); count.className = 'dashboard-stat-count'; count.textContent = data[key];
       const label = document.createElement('span'); label.className = 'dashboard-stat-label'; label.textContent = title;
       const caption = document.createElement('span'); caption.className = 'dashboard-stat-caption'; caption.textContent = detail;
@@ -19,6 +19,19 @@
     }
     if (!root.children.length && !data.upcomingEvents) {
       const empty = document.createElement('div'); empty.className = 'dashboard-empty'; empty.textContent = 'Your workspace summary will appear here when content tools are available.'; root.append(empty);
+    }
+    const work = [['Draft articles',data.drafts],['Awaiting review',data.awaitingReview],['Unpublished photos',data.unpublishedPhotos],['Incomplete uploads',data.incompleteUploads]].filter(item => item[1] != null);
+    if (work.length) {
+      const panel = document.createElement('section'); panel.className = 'dashboard-workload panel';
+      const title = document.createElement('h2'); title.textContent = 'Work awaiting attention';
+      const help = document.createElement('p'); help.className = 'muted small'; help.textContent = 'Current items in your workspace, grouped by the next action needed.'; panel.append(title,help);
+      const max = Math.max(1,...work.map(item => item[1]));
+      for (const [name,count] of work) {
+        const row = document.createElement('div'); row.className = 'workload-row'; const label = document.createElement('span'); label.textContent = name;
+        const meter = document.createElement('meter'); meter.min = 0; meter.max = max; meter.value = count; meter.setAttribute('aria-label',name); meter.textContent = count;
+        const value = document.createElement('strong'); value.textContent = count; row.append(label,meter,value); panel.append(row);
+      }
+      root.append(panel);
     }
     if (data.upcomingEvents) {
       const section = document.createElement('section'); section.className = 'dashboard-events';

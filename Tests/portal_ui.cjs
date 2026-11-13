@@ -5,12 +5,60 @@ const assert = require('node:assert/strict');
  const page = await browser.newPage();
  require('node:fs').mkdirSync('test-results', {recursive:true});
  const base = process.env.FHGM_TEST_URL || 'http://127.0.0.1:5080';
+ const consoleErrors = []; page.on('pageerror', error => consoleErrors.push(error.message));
+ async function confirmAction(action) { const pending = action(); await page.locator('#portal-confirm [data-confirm-accept]').click(); await pending; }
+
  await page.goto(base + '/account/login');
  await page.locator('[name=email]').fill(process.env.Bootstrap__Email);
  await page.locator('[name=password]').fill(process.env.Bootstrap__Password);
  await page.getByRole('button',{name:/Sign in/}).click();
  await page.waitForURL(base + '/admin/');
  await page.waitForFunction(() => document.querySelector('#dashboard-summary')?.textContent.includes('Articles'));
+ // Shared shell, all existing management pages, and responsive navigation.
+ const auditPages = [
+  ['/admin/','Overview'], ['/admin/blogs','Blog articles'], ['/admin/gallery','Photo gallery'],
+  ['/admin/events','Events'], ['/admin/popups','Announcements'], ['/admin/users','Team members'],
+  ['/admin/audit','Activity log'], ['/admin/monitoring','Monitoring'], ['/account/security','Password & security']
+ ];
+ for (const width of [1440,820,390]) {
+  await page.setViewportSize({width,height:1000});
+  for (const [path,title] of auditPages) {
+   await page.goto(base + path);
+   await page.locator('.portal-breadcrumbs [aria-current=page]').waitFor();
+   assert.equal(await page.locator('.portal-breadcrumbs [aria-current=page]').textContent(), title);
+   if (path === '/admin/') await page.waitForFunction(() => document.querySelectorAll('.dashboard-stat-card').length === 4);
+   else if (path === '/admin/gallery') await page.waitForFunction(() => !document.querySelector('#album-new').disabled);
+   else if (path === '/admin/blogs') await page.waitForFunction(() => document.querySelector('#blog-page').textContent.includes('Page'));
+   else if (path === '/admin/users') await page.waitForFunction(() => document.querySelector('#user-page').textContent.includes('Page'));
+   else if (path === '/admin/audit') await page.waitForFunction(() => document.querySelector('#audit-page').textContent.includes('Page'));
+   else if (path === '/admin/events' || path === '/admin/popups') await page.waitForFunction(() => document.querySelector('#content-page').textContent.includes('Page'));
+   else if (path === '/account/security') await page.waitForFunction(() => document.querySelector('#security-status').textContent.includes('Authenticator'));
+   else if (path === '/admin/monitoring') await page.waitForFunction(() => !document.querySelector('#monitor-checked').textContent.includes('Checking'));
+   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+   assert.equal(await page.locator('#portal-navigation .nav-item .ui-icon').count() >= 8, true);
+   if (width <= 1024) {
+    const trigger = page.locator('#portal-nav-toggle'); await trigger.click();
+    assert.equal(await trigger.getAttribute('aria-expanded'), 'true');
+    await page.keyboard.press('Escape'); assert.equal(await trigger.getAttribute('aria-expanded'), 'false');
+    assert.equal(await trigger.evaluate(el => el === document.activeElement), true);
+   }
+   await page.screenshot({path:`test-results/portal-${path.replace(/[^a-z]+/gi,'-')}-${width}.png`,fullPage:true});
+  }
+ }
+ await page.setViewportSize({width:390,height:1000});
+ await page.goto(base + '/admin/'); await page.locator('#portal-nav-toggle').click();
+ await page.locator('#portal-navigation').getByRole('link',{name:'Photo gallery',exact:true}).click();
+ await page.waitForURL(base + '/admin/gallery');
+ assert.equal(await page.locator('#portal-navigation a.selected').getAttribute('aria-current'), 'page');
+ assert.equal(await page.locator('#portal-nav-toggle').getAttribute('aria-expanded'), 'false');
+ await page.setViewportSize({width:1280,height:1000});
+ await page.goto(base + '/admin/');
+ await page.waitForFunction(() => document.querySelectorAll('.workload-row').length > 0);
+ assert.equal(await page.locator('.dashboard-stat-card .ui-icon').count(), 4);
+ // Confirm dialogs are keyboard dismissible without running an action.
+ await page.evaluate(() => { PortalUI.confirm('Delete a test item?').then(value => { window.confirmationCancelled = value === false; }); });
+ await page.locator('#portal-confirm').waitFor({state:'visible'}); await page.keyboard.press('Escape');
+ await page.waitForFunction(() => window.confirmationCancelled === true);
  await page.goto(base + '/admin/blogs');
  await page.locator('#new-blog').click();
  const title = 'Browser article ' + Date.now();
@@ -40,8 +88,7 @@ const assert = require('node:assert/strict');
  assert.equal(await page.locator('#blog-form').isHidden(), true);
  await page.waitForFunction(() => reviewedVersion === current.version);
  assert.equal(await page.frameLocator('#website-preview').locator('#cmsTitle').textContent(), title);
- page.once('dialog', dialog => dialog.accept());
- await page.getByRole('button', {name:'Publish reviewed article', exact:true}).click();
+ await confirmAction(() => page.getByRole('button', {name:'Publish reviewed article', exact:true}).click());
  await page.waitForFunction(() => document.querySelector('#editor-status').textContent.startsWith('Published'));
  // Save a published revision privately and automatically enter review.
  const publishedSlug = await page.locator('#blog-form [name=slug]').inputValue();
@@ -58,28 +105,23 @@ const assert = require('node:assert/strict');
  assert.equal(await page.locator('#blog-form [name=content]').isEditable(), true);
  await page.locator('#save-blog').click();
  await page.waitForFunction(() => current?.hasPendingChanges && reviewedVersion === current.version);
- page.once('dialog', dialog => dialog.accept());
- await page.getByRole('button', {name:'Publish reviewed changes', exact:true}).click();
+ await confirmAction(() => page.getByRole('button', {name:'Publish reviewed changes', exact:true}).click());
  await page.waitForFunction(() => !current?.hasPendingChanges && current?.status === 'Published');
  const afterPublication = await page.request.get(base + '/api/public/blog/' + publishedSlug);
  assert.equal((await afterPublication.json()).content, 'Reviewed change to the published article');
  // Unpublish and republish without another person's approval.
- page.once('dialog', dialog => dialog.accept());
- await page.locator('#workflow').getByRole('button', {name:'Unpublish', exact:true}).click();
+ await confirmAction(() => page.locator('#workflow').getByRole('button', {name:'Unpublish', exact:true}).click());
  await page.waitForFunction(() => current?.status === 'Draft');
  await page.locator('#preview-blog').click();
  await page.waitForFunction(() => reviewedVersion === current.version);
- page.once('dialog', dialog => dialog.accept());
- await page.getByRole('button', {name:'Publish reviewed article', exact:true}).click();
+ await confirmAction(() => page.getByRole('button', {name:'Publish reviewed article', exact:true}).click());
  await page.waitForFunction(() => current?.status === 'Published');
 
- page.once('dialog', dialog => dialog.accept());
- await page.locator('#close-editor').click();
+ await confirmAction(() => page.locator('#close-editor').click());
  assert.equal(await page.locator('#blog-workflow-summary').textContent(), 'Save → Preview → Publish');
  const articleRow = page.locator('#blog-rows tr').filter({hasText:title});
  await articleRow.getByRole('button', {name:'Edit article', exact:true}).waitFor({state:'visible'});
- page.once('dialog', dialog => dialog.accept());
- await articleRow.getByRole('button', {name:'Delete blog', exact:true}).click();
+ await confirmAction(() => articleRow.getByRole('button', {name:'Delete blog', exact:true}).click());
  await articleRow.waitFor({state:'detached'});
  await page.goto(base + '/admin/gallery');
  await page.waitForFunction(() => !document.querySelector('#album-new').disabled);
@@ -239,6 +281,7 @@ const assert = require('node:assert/strict');
  await popup.close();
  await page.goto(base + '/account/security');
  await page.waitForFunction(() => document.querySelector('#security-status').textContent.includes('Authenticator'));
+ assert.deepEqual(consoleErrors, []);
  await browser.close();
  console.log('PASS: dashboard, article preview/autosave, upload failure/retry, bulk publication, cover selection and account security page');
 })().catch(error => { console.error(error); process.exit(1); });

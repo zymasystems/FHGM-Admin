@@ -166,7 +166,7 @@
         publication.classList.add('gallery-publication-button', image.isPublished ? 'is-unpublish' : 'is-publish');
         actions.append(publication);
       }
-      const remove = button('Remove photo', async () => { if (!confirm('Remove this photo from the gallery?')) return; await api('gallery/images/' + image.id, 'DELETE', {}); await loadImages(); notice('Photo removed from the gallery.'); }); remove.classList.add('gallery-remove-button'); actions.append(remove); content.append(actions); card.append(content);
+      const remove = button('Remove photo', async () => { if (!await PortalUI.confirm('Remove this photo from the gallery?')) return; await api('gallery/images/' + image.id, 'DELETE', {}); await loadImages(); notice('Photo removed from the gallery.'); }); remove.classList.add('gallery-remove-button'); actions.append(remove); content.append(actions); card.append(content);
       if (publishingIds.has(image.id)) card.querySelectorAll('button,input').forEach(item => { item.disabled = true; }); el('gallery-images').append(card);
     }
   }
@@ -200,7 +200,7 @@
     el(id).addEventListener('click', () => perform(el(id), async () => {
       const chosen = imageItems.filter(x => selectedIds.has(x.id));
       if (!chosen.length) throw new Error('Select photos first.');
-      if (action === 'remove' && !confirm(`Remove ${chosen.length} selected photos?`)) return;
+      if (action === 'remove' && !await PortalUI.confirm(`Remove ${chosen.length} selected photos?`)) return;
       let done = 0, failures = [];
       for (const photo of chosen) {
         try {
@@ -262,7 +262,7 @@
       const limit = uploadMode() === 'single' ? 1 : 20;
       if (!files.length || files.length > limit) throw new Error(`Choose 1–${limit} photos for this upload mode.`);
       for (const file of files) if (!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size < 16 || file.size > 10485760) throw new Error(`${file.name}: choose a JPEG, PNG or WebP image up to 10 MB.`);
-      if (queue.some(x => x.state.startsWith('Failed')) && !confirm('Replace the retry queue? Incomplete records can still be removed from the album.')) return;
+      if (queue.some(x => x.state.startsWith('Failed')) && !await PortalUI.confirm('Replace the retry queue? Incomplete records can still be removed from the album.')) return;
       queue = files.map(file => ({ file, albumId: selected.id, state: 'Waiting', uploadId: null, done: false }));
       chosenFiles = []; syncFileInput(); drawFilePreviews(); await runQueue(queue);
     }).finally(uploadLabels);

@@ -22,7 +22,7 @@
       $('mfa-recovery').textContent = 'Save these single-use recovery codes now:\n' + data.recoveryCodes.join('\n'); await refresh();
     }); });
     $('mfa-disable').addEventListener('click', () => perform($('mfa-disable'), async () => {
-      if (!confirm('Disable authenticator protection?')) return;
+      if (!await PortalUI.confirm('Disable authenticator protection?')) return;
       await api('security/mfa/disable', 'POST', proof()); await token(); $('mfa-form').reset(); $('mfa-recovery').textContent = ''; await refresh();
     }));
   }
